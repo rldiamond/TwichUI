@@ -68,6 +68,7 @@ Valuator.DECISIONS = {
 --- @param isJunk boolean Whether the item is junk (poor quality).
 --- @param vendorCopperValue integer Vendor sell value per item in copper.
 --- @param minSaleRate number|nil The minimum sale rate threshold for the TSM price source with gate.
+--- @return integer copperPerItem The per-item value in copper determined by the valuation.
 --- @return integer totalCopper The total value in copper for this loot event.
 --- @return string decision A normalized decision string: "ignore","vendor","disenchant","market", or "unknown".
 local function RunValuationOnItem(
@@ -84,13 +85,13 @@ local function RunValuationOnItem(
     -- Short helper for safe fallback to vendor value
     local function FallbackToVendor(reason)
         Logger.Error(("Valuation fallback to vendor for %s: %s"):format(itemLink or "nil", reason or "unknown"))
-        return vendorCopperValue * quantity, Valuator.DECISIONS.VENDOR
+        return vendorCopperValue, vendorCopperValue * quantity, Valuator.DECISIONS.VENDOR
     end
 
     -- IGNORE: treat as worth 0
     if valuationMethod.uid == Valuator.VALUATION_METHODS.IGNORE.uid then
         Logger.Debug(("Item valuation: %s valued at 0c (ignored)."):format(itemLink or "nil"))
-        return 0, Valuator.DECISIONS.IGNORE
+        return 0, 0, Valuator.DECISIONS.IGNORE
     end
 
     -- VENDOR: always vendor price
@@ -98,7 +99,7 @@ local function RunValuationOnItem(
         Logger.Debug(("Item valuation: %s valued at %dc each (vendor)."):format(
             itemLink or "nil", vendorCopperValue
         ))
-        return vendorCopperValue * quantity, Valuator.DECISIONS.VENDOR
+        return vendorCopperValue, vendorCopperValue * quantity, Valuator.DECISIONS.VENDOR
     end
 
     -- Helper to get TSM destroy value once
@@ -130,7 +131,7 @@ local function RunValuationOnItem(
         Logger.Debug(("Item valuation: %s valued at %dc each (disenchant)."):format(
             itemLink or "nil", destroyValue
         ))
-        return destroyValue * quantity, Valuator.DECISIONS.DISENCHANT
+        return destroyValue, destroyValue * quantity, Valuator.DECISIONS.DISENCHANT
     end
 
     -- DISENCHANT OR VENDOR: choose higher of destroy and vendor
@@ -144,13 +145,13 @@ local function RunValuationOnItem(
             Logger.Debug(("Item valuation: %s should be disenchanted (%dc each > %dc vendor)."):format(
                 itemLink or "nil", destroyValue, vendorCopperValue
             ))
-            return destroyValue * quantity, Valuator.DECISIONS.DISENCHANT
+            return destroyValue, destroyValue * quantity, Valuator.DECISIONS.DISENCHANT
         end
 
         Logger.Debug(("Item valuation: %s should be vended (%dc each >= %dc destroy)."):format(
             itemLink or "nil", vendorCopperValue, destroyValue
         ))
-        return vendorCopperValue * quantity, Valuator.DECISIONS.VENDOR
+        return vendorCopperValue, vendorCopperValue * quantity, Valuator.DECISIONS.VENDOR
     end
 
     -- TSM SOURCE WITH RESALE GATE:
@@ -161,7 +162,7 @@ local function RunValuationOnItem(
             Logger.Debug(("Item valuation: %s sold via market (saleRate=%.4f >= %.4f) at %dc each."):format(
                 itemLink or "nil", saleRate, minSaleRate, copperValue
             ))
-            return copperValue * quantity, Valuator.DECISIONS.MARKET
+            return copperValue, copperValue * quantity, Valuator.DECISIONS.MARKET
         end
 
         -- Below gate: use DE vs vendor comparison
@@ -175,14 +176,14 @@ local function RunValuationOnItem(
                 ("Item valuation: %s below sale gate; should be disenchanted (%dc each > %dc vendor).")
                 :format(itemLink or "nil", destroyValue, vendorCopperValue)
             )
-            return destroyValue * quantity, Valuator.DECISIONS.DISENCHANT
+            return destroyValue, destroyValue * quantity, Valuator.DECISIONS.DISENCHANT
         end
 
         Logger.Debug(
             ("Item valuation: %s below sale gate; should be vended (%dc each >= %dc destroy).")
             :format(itemLink or "nil", vendorCopperValue, destroyValue)
         )
-        return vendorCopperValue * quantity, Valuator.DECISIONS.VENDOR
+        return vendorCopperValue, vendorCopperValue * quantity, Valuator.DECISIONS.VENDOR
     end
 
     -- TSM SOURCE: simply use the configured TSM price source.
@@ -193,9 +194,9 @@ local function RunValuationOnItem(
         -- If copperValue is 0, this is effectively worthless; still call it "market" so you can see intent
         local decision = (copperValue > 0) and Valuator.DECISIONS.MARKET or Valuator.DECISIONS.VENDOR
         if copperValue > 0 then
-            return copperValue * quantity, decision
+            return copperValue, copperValue * quantity, decision
         else
-            return vendorCopperValue * quantity, decision
+            return vendorCopperValue, vendorCopperValue * quantity, decision
         end
     end
 
@@ -203,7 +204,7 @@ local function RunValuationOnItem(
     Logger.Warn((
         "GoldPerHourTracker:RunValuationOnItem received unsupported valuationMethod '%s'. Using TSM price source."
     ):format(tostring(valuationMethod)))
-    return copperValue * quantity, Valuator.DECISIONS.UNKNOWN
+    return copperValue, copperValue * quantity, Valuator.DECISIONS.UNKNOWN
 end
 
 
@@ -235,8 +236,10 @@ end
 --- Handles Loot Receved events, valuating the items and sending the results to the callback.
 --- @param quantity number the quantity of the item received.
 --- @param itemInfo table the information about the item received.
+--- @return integer copperPerItem the per-item value in copper
 --- @return integer totalCopper the total value of the loot event in copper
 --- @return string descision the decision made by the valuator when determining loot value
+--- @return integer saleRate the sale rate of the item as reported by TSM
 local function HandleLootReceivedEvent(quantity, itemInfo)
     local copperValue, saleRate = GetTSMValue(itemInfo.link)
 
@@ -248,7 +251,7 @@ local function HandleLootReceivedEvent(quantity, itemInfo)
         local valuationMethod = CM:GetProfileSettingSafe("lootMonitor.itemValuation.junkItems.valuationMethod",
             Valuator.VALUATION_METHODS.VENDOR)
         return RunValuationOnItem(itemInfo.link, quantity, copperValue, saleRate, valuationMethod, true,
-            itemInfo.sellPrice)
+            itemInfo.sellPrice), saleRate
     end
 
     -- armor/weapons
@@ -258,7 +261,7 @@ local function HandleLootReceivedEvent(quantity, itemInfo)
         local minSaleRate = CM:GetProfileSettingSafe(
             "lootMonitor.itemValuation.armorAndWeaponItems.minimumSaleRate", 0.010)
         return RunValuationOnItem(itemInfo.link, quantity, copperValue, saleRate, valuationMethod, false,
-            itemInfo.sellPrice, minSaleRate)
+            itemInfo.sellPrice, minSaleRate), saleRate
     end
 
     -- remaining items
@@ -267,7 +270,7 @@ local function HandleLootReceivedEvent(quantity, itemInfo)
     local minSaleRate = CM:GetProfileSettingSafe(
         "lootMonitor.itemValuation.remainingItems.minimumSaleRate", 0.010)
     return RunValuationOnItem(itemInfo.link, quantity, copperValue, saleRate, valuationMethod, false,
-        itemInfo.sellPrice, minSaleRate)
+        itemInfo.sellPrice, minSaleRate), saleRate
 end
 
 --- Handles events received from the callback
@@ -275,17 +278,22 @@ local function HandleEvents(event, ...)
     if event == LM.EVENTS.LOOT_RECEIVED then
         ---@type LootReceievedEventData
         local receivedEventData = ...
-        local totalCopper, decision = HandleLootReceivedEvent(receivedEventData.quantity, receivedEventData.itemInfo)
+        local copperPerItem, totalCopper, decision, saleRate = HandleLootReceivedEvent(receivedEventData.quantity,
+            receivedEventData.itemInfo)
 
         ---@class LootValuatedEventData
         ---@field itemInfo LootMonitorItemInfo
         ---@field quantity number
         ---@field totalValueCopper number
+        ---@field copperPerItem number
+        ---@field saleRate number
         ---@field decision string
         local eventData = {
             itemInfo = receivedEventData.itemInfo,
             quantity = receivedEventData.quantity,
             totalValueCopper = totalCopper,
+            copperPerItem = copperPerItem,
+            saleRate = saleRate,
             decision = decision
         }
 

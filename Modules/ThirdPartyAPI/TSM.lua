@@ -23,15 +23,16 @@ TSM.API = TSM_API
 --- @param endpoint any the endpoint to access
 --- @return boolean available True if the TSM API is available; false otherwise.
 function TSM:Available(endpoint)
-    if not TSM_API then
-        return false
-    end
-
-    if (endpoint ~= nil and not endpoint) then
-        return false
-    end
-
     return true
+    -- if not TSM_API then
+    --     return false
+    -- end
+
+    -- if (endpoint ~= nil and not endpoint) then
+    --     return false
+    -- end
+
+    -- return true
 end
 
 --- Retrieves the list of available TSM price source keys.

@@ -223,6 +223,7 @@ local keywordColorMap = {
     { keyword = "modules",          color = TM.Colors.TWICH.SECONDARY_ACCENT },
     { keyword = "Loot Monitor",     color = TM.Colors.TWICH.SECONDARY_ACCENT },
     { keyword = "notable item",     color = TM.Colors.TWICH.TERTIARY_ACCENT },
+    { keyword = "notable items",     color = TM.Colors.TWICH.TERTIARY_ACCENT },
     { keyword = "gold per hour",    color = TM.Colors.TWICH.TERTIARY_ACCENT },
     { keyword = "item valuation",   color = TM.Colors.TWICH.TERTIARY_ACCENT },
     { keyword = "performance",      color = TM.Colors.TWICH.TEXT_WARNING },

@@ -20,6 +20,7 @@ local T, W, I, C = unpack(Twich)
 --- @field New fun():CallbackInstance
 
 --- @class ToolsModule
+--- @field Money MoneyTool
 --- @field Callback CallbackPrototype
 local TM = T:GetModule("Tools")
 

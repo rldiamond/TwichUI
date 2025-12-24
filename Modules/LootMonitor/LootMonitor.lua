@@ -3,6 +3,8 @@ local T, W, I, C    = unpack(Twich)
 ---@field enabled boolean
 ---@field frame Frame
 ---@field ItemValuator ItemValuator
+---@field NotableItemNotificationHandler NotableItemNotificationHandler
+---@field NotableItemNotificationFrame NotableItemNotificationFrame
 local LM            = T:GetModule("LootMonitor")
 
 LM.EVENTS           = {
@@ -251,6 +253,21 @@ function LM:Enable()
     Logger.Debug("Loot monitor enabled")
 
     LM.ItemValuator:Enable()
+    LM.NotableItemNotificationHandler:Initialize()
+
+    -- temporarily registering a callback handler here to debug
+    local callbackID = callbackHandler:Register(function(event, ...)
+        Logger.Debug("Loot Monitor callback invoked for event: " .. tostring(event))
+        for i = 1, select("#", ...) do
+            local v = select(i, ...)
+            if type(v) == "table" then
+                Logger.Debug("Arg " .. i .. " (table): ")
+                Logger.DumpTable(v)
+            else
+                Logger.Debug("Arg " .. i .. ": " .. tostring(v))
+            end
+        end
+    end)
 end
 
 --- Disable the Loot Monitor module
@@ -271,7 +288,6 @@ end
 
 --- Called by Ace on initialization.
 function LM:OnInitialize()
-    Logger.Debug("Loot Monitor initialing..")
     -- if already enabled, do nothing
     if self:IsEnabled() then return end
 
@@ -281,20 +297,6 @@ function LM:OnInitialize()
     if not CM:GetProfileSettingSafe("lootMonitor.enable", false) then return end
 
     self:Enable()
-
-    -- temporarily registering a callback handler here to debug
-    local callbackID = callbackHandler:Register(function(event, ...)
-        Logger.Debug("Loot Monitor callback invoked for event: " .. tostring(event))
-        for i = 1, select("#", ...) do
-            local v = select(i, ...)
-            if type(v) == "table" then
-                Logger.Debug("Arg " .. i .. " (table): ")
-                Logger.DumpTable(v)
-            else
-                Logger.Debug("Arg " .. i .. ": " .. tostring(v))
-            end
-        end
-    end)
 end
 
 --- Get the CallbackInstance for the module. The following events are available: "LOOT_MONITOR_LOOT_RECEIVED", and "LOOT_MONITOR_MONEY_RECEIVED".

@@ -182,6 +182,62 @@ do
     end
 end
 
+-- Auto-open options handler (enable/disable)
+do
+    local auto = {
+        frame = nil,
+        enabled = false,
+        tries = 0,
+        maxTries = 20,
+        delay = 0.2,
+    }
+
+    local function tryOpen()
+        auto.tries = auto.tries + 1
+        local ok = pcall(function() T:ToggleOptionsUI() end)
+        if ok then
+            -- success, stop further attempts
+            if auto.frame then
+                auto.frame:UnregisterEvent("PLAYER_LOGIN")
+            end
+            auto.enabled = false
+            return
+        end
+        if auto.tries < auto.maxTries and _G.C_Timer and _G.C_Timer.After then
+            _G.C_Timer.After(auto.delay, tryOpen)
+        else
+            auto.enabled = false
+        end
+    end
+
+    function T:StartAutoOpenOptions()
+        if auto.enabled then return end
+        auto.enabled = true
+        auto.tries = 0
+        if not auto.frame then
+            auto.frame = _G.CreateFrame("Frame")
+            auto.frame:SetScript("OnEvent", function(self, event, ...)
+                if event == "PLAYER_LOGIN" then
+                    if _G.C_Timer and _G.C_Timer.After then
+                        _G.C_Timer.After(0.2, tryOpen)
+                    else
+                        tryOpen()
+                    end
+                end
+            end)
+        end
+        auto.frame:RegisterEvent("PLAYER_LOGIN")
+    end
+
+    function T:StopAutoOpenOptions()
+        if not auto.enabled then return end
+        auto.enabled = false
+        if auto.frame then
+            auto.frame:UnregisterEvent("PLAYER_LOGIN")
+        end
+    end
+end
+
 --- Called by AceAddon when the addon is initialized. Sets up the database baseline, configures addon configuration panel, and registers events.
 function T:OnInitialize()
     ---@type LoggerModule
@@ -213,4 +269,7 @@ function T:OnInitialize()
     Configuration:CreateAddonConfiguration()
 
     Logger.Info("AddOn initialized.")
+
+    -- Start the auto-open handler (can be enabled/disabled via Start/Stop)
+    pcall(function() T:StartAutoOpenOptions() end)
 end

@@ -32,6 +32,7 @@ function CM:CreateGeneralConfiguration()
                 name = "Show Welcome Message on Login",
                 desc = "If enabled, the welcome message will be displayed in chat each time you log in to the game.",
                 order = 4,
+                width = 1.5,
                 get = function()
                     return CM:GetProfileSettingSafe("general.showWelcomeMessageOnLogin", true)
                 end,

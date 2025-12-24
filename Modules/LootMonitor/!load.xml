@@ -1,4 +1,6 @@
 <Ui xmlns='http://www.blizzard.com/wow/ui/'>
     <Script file="LootMonitor.lua" />
     <Script file="ItemValuation.lua" />
+    <Script file="NotableItemNotificationHandler.lua" />
+    <Script file="NotableItemNotificationFrame.lua" />
 </Ui>

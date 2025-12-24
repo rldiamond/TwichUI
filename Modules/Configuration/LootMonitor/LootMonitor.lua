@@ -11,6 +11,7 @@ local TM = T:GetModule("Tools")
 
 --- @class LootMonitorConfigurationModule
 --- @field ItemValuation ItemValudationConfigurationModule
+--- @field NotableItems NotableItemConfigurationModule
 CM.LootMonitor = CM.LootMonitor or {}
 
 --- Creates the primary loot monitor configuration panels.
@@ -24,10 +25,9 @@ function CM:CreateLootMonitorConfiguration()
                 moduleEnableToggle = {
                     type = "toggle",
                     name = TT.Color(CT.TWICH.SECONDARY_ACCENT, "Enable"),
-                    desc = "Enable the Loot Monitor module.",
+                    desc = CM:ColorTextKeywords("Enable the Loot Monitor module."),
                     descStyle = "inline",
                     order = 2,
-                    icon = "Interface\\AddOns\\TwichUI\\Media\\Textures\\gold-coin",
                     width = "full",
                     get = function()
                         return CM:GetProfileSettingSafe("lootMonitor.enable", false)
@@ -57,7 +57,21 @@ function CM:CreateLootMonitorConfiguration()
 
                 itemValuationSubmodule = CM.Widgets:SubmoduleGroup(9, "Item Valuation",
                     "The Item Valuation submodule allows customization of how the Loot Monitor and its submodules determine the value of items.",
-                    CM.LootMonitor.ItemValuation:Create(1)),
+                    "lootMonitor.enable", nil, nil,
+                    CM.LootMonitor.ItemValuation:Create()),
+
+                notableItemsSubmodule = CM.Widgets:SubmoduleGroup(10, "Notable Items",
+                    "This submodule will display a notification when a Notable Item is looted. A Notable Item is any item whose value meets or exceeds your configured threshholds.",
+                    "lootMonitor.enable", "lootMonitor.notableItems.enable", function(enabled)
+                        --- @type LootMonitorModule
+                        local LM = T:GetModule("LootMonitor")
+                        if enabled then
+                            LM.NotableItemNotificationHandler:Enable()
+                        else
+                            LM.NotableItemNotificationHandler:Disable()
+                        end
+                    end,
+                    CM.LootMonitor.NotableItems:Create()),
 
             })
 end

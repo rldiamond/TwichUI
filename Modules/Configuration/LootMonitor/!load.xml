@@ -2,4 +2,5 @@
     <Script file="ItemValuation.lua" />
 
     <Script file="LootMonitor.lua" />
+    <Script file="NotableItems.lua" />
 </Ui>

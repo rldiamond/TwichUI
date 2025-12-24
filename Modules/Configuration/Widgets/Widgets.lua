@@ -96,14 +96,21 @@ end
 --- @param order integer The order of the submodule group in the configuration.
 --- @param submoduleName string The name of the submodule.
 --- @param description string The description of the submodule.
+--- @param parentModuleEnabledDotPath string The dot path to the parent module's enabled setting. Used to hide/show the submodule group.
+--- @param submoduleEnableDotPath string|nil The dot path to the submodule's enabled setting. Used to create the enable button. If nil, no enable button is created.
+--- @param onEnableFunc function|nil A function to call when the submodule is enabled/disabled. If nil, no function is called.
 --- @param args table The arguments for the submodule group.
 --- @return table A submodule group configuration widget.
-function Widgets:SubmoduleGroup(order, submoduleName, description, args)
+function Widgets:SubmoduleGroup(order, submoduleName, description, parentModuleEnabledDotPath, submoduleEnableDotPath,
+                                onEnableFunc, args)
     local group = {
         type = "group",
         name = TM.Text.Color(TM.Colors.TWICH.TERTIARY_ACCENT, submoduleName),
         order = order,
         childGroups = "tab",
+        hidden = function()
+            return not CM:GetProfileSettingSafe(parentModuleEnabledDotPath, false)
+        end,
         args = {
             _submoduleDescription = {
                 type = "description",
@@ -115,11 +122,32 @@ function Widgets:SubmoduleGroup(order, submoduleName, description, args)
             _submoduleConfigurationHeader = {
                 type = "header",
                 name = "Configuration",
-                order = 0.02
+                order = 0.03
             },
-            _submoduleSpacer2 = self:Spacer(0.03),
+            _submoduleSpacer2 = self:Spacer(0.04),
         }
     }
+
+    if submoduleEnableDotPath then
+        group.args._submoduleEnable = {
+            type = "toggle",
+            name = "Enable",
+            desc = CM:ColorTextKeywords("Enable the " .. submoduleName .. " submodule."),
+            descStyle = "inline",
+            width = "full",
+            order = 0.02,
+            get = function()
+                return CM:GetProfileSettingSafe(submoduleEnableDotPath, false)
+            end,
+            set = function(_, value)
+                CM:SetProfileSettingSafe(submoduleEnableDotPath, value)
+                if onEnableFunc and type(onEnableFunc) == "function" then
+                    onEnableFunc(value)
+                end
+            end
+        }
+    end
+
 
     if type(args) == "table" then
         for k, v in pairs(args) do

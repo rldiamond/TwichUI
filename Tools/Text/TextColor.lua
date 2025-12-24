@@ -126,3 +126,59 @@ end
 function TextTool.PrintToChatFrame(text)
     DEFAULT_CHAT_FRAME:AddMessage(text, 0.0, 1.0, 0.0)
 end
+
+--- Inserts thousands separators into an integer string (e.g. "88900" -> "88,900").
+-- @param n number
+-- @return string
+local function FormatWithCommas(n)
+    if not n then
+        return "0"
+    end
+
+    local s = tostring(n)
+    -- simple non‑locale grouping: 1234567 -> 1,234,567
+    local k
+    while true do
+        s, k = s:gsub("^(-?%d+)(%d%d%d)", "%1,%2")
+        if k == 0 then break end
+    end
+    return s
+end
+
+function TextTool.FormatCopper(copper)
+    if not copper or copper <= 0 then
+        copper = 0
+    end
+
+    local gold         = math.floor(copper / (100 * 100))
+    local silver       = math.floor((copper / 100) % 100)
+    local cop          = math.floor(copper % 100)
+
+    local COLOR_GOLD   = "|cff" .. NormalizeHexValue(TM.Colors.WARCRAFT.CURRENCY.GOLD)
+    local COLOR_SILVER = "|cff" .. NormalizeHexValue(TM.Colors.WARCRAFT.CURRENCY.SILVER)
+    local COLOR_COPPER = "|cff" .. NormalizeHexValue(TM.Colors.WARCRAFT.CURRENCY.COPPER)
+    local COLOR_RESET  = "|r"
+
+    local goldStr      = FormatWithCommas(gold)
+
+    return string.format(
+        "%s" .. COLOR_GOLD .. "g" .. COLOR_RESET ..
+        " %d" .. COLOR_SILVER .. "s" .. COLOR_RESET ..
+        " %d" .. COLOR_COPPER .. "c" .. COLOR_RESET,
+        goldStr, silver, cop
+    )
+end
+
+function TextTool.FormatCopperShort(copper)
+    if not copper or copper <= 0 then
+        copper = 0
+    end
+
+    local gold        = math.floor(copper / (100 * 100))
+
+    local COLOR_GOLD  = "|cff" .. NormalizeHexValue(TM.Colors.WARCRAFT.CURRENCY.GOLD)
+    local COLOR_RESET = "|r"
+
+    local goldStr     = FormatWithCommas(gold)
+    return goldStr .. COLOR_GOLD .. "g" .. COLOR_RESET
+end

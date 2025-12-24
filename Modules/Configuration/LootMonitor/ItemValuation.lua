@@ -22,8 +22,7 @@ local IV = CM.LootMonitor.ItemValuation or {}
 CM.LootMonitor.ItemValuation = IV
 
 --- Creates the configuration panel to configure how items are valuated.
---- @param order number The order in which this configuration should appear in the main configuration panel.
-function IV:Create(order)
+function IV:Create()
     local TT = TM.Text
     local CT = TM.Colors
     return { -- warning text if TSM is not available
@@ -350,7 +349,7 @@ function IV:Create(order)
                                 local methods = module.ItemValuator.VALUATION_METHODS
                                 local method = CM:GetProfileSettingSafe(
                                     "lootMonitor.itemValuation.remainingItems.valuationMethod",
-                                    methods.DISENCHANT_OR_VENDOR)
+                                    methods.TSM_PRICE_SOURCE_WITH_GATE)
                                 return method.uid ~= methods.TSM_PRICE_SOURCE_WITH_GATE.uid
                             end,
                             get = function()
