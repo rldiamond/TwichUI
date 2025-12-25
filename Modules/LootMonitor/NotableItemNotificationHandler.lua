@@ -36,11 +36,11 @@ local function LootMonitorEventHandler(event, ...)
         -- determine if the item looted is notable
         local minCopperValue = CM:GetProfileSettingSafe("lootMonitor.notableItems.minCopperValue", 100 * 100 * 100) -- default 100 gold
         local minSaleRate = CM:GetProfileSettingSafe("lootMonitor.notableItems.minSaleRate", 0.01)
-        ShowNotificationFrame(eventData)
-        -- if eventData.copperPerItem >= minCopperValue and eventData.saleRate >= minSaleRate then
-        --     -- show the notification frame.
-        --     ShowNotificationFrame(eventData)
-        -- end
+        -- ShowNotificationFrame(eventData)
+        if eventData.copperPerItem >= minCopperValue and eventData.saleRate >= minSaleRate then
+            -- show the notification frame.
+            ShowNotificationFrame(eventData)
+        end
     end
 end
 
@@ -93,7 +93,7 @@ function NIH:TestShowNotification(itemLink, copperValue, quantity)
     LM.NotableItemNotificationFrame:Initialize()
 
     Logger.Debug("NotableItemNotificationHandler:TestShowNotification() - link=" ..
-    tostring(itemLink) .. " value=" .. tostring(copperValue) .. " qty=" .. tostring(quantity))
+        tostring(itemLink) .. " value=" .. tostring(copperValue) .. " qty=" .. tostring(quantity))
 
     local eventData = {
         itemInfo = { link = itemLink },

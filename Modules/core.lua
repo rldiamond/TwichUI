@@ -51,6 +51,7 @@ T.Media = T:NewModule("Media")
 T.Configuration = T:NewModule("Configuration")
 T.ThirdPartyAPI = T:NewModule("ThirdPartyAPI")
 T.SlashCommands = T:NewModule("SlashCommands", "AceConsole-3.0")
+T.GoldGoblin = T:NewModule("GoldGoblin")
 
 --[[
     Register Libraries to Engine

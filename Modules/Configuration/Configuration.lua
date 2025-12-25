@@ -228,7 +228,8 @@ function CM:CreateAddonConfiguration()
             welcome = CM:CreateWelcomePanel(),
             general = CM:CreateGeneralConfiguration(),
             lootMonitor = CM:CreateLootMonitorConfiguration(),
-            developer = CM:CreateDeveloperConfiguration()
+            developer = CM:CreateDeveloperConfiguration(),
+            goldGoblin = CM.GoldGoblin:Create(),
         }
     }
 end
@@ -240,6 +241,8 @@ local keywordColorMap = {
     { keyword = "module",           color = TM.Colors.TWICH.SECONDARY_ACCENT },
     { keyword = "modules",          color = TM.Colors.TWICH.SECONDARY_ACCENT },
     { keyword = "Loot Monitor",     color = TM.Colors.TWICH.SECONDARY_ACCENT },
+    { keyword = "gold goblin",      color = TM.Colors.TWICH.SECONDARY_ACCENT },
+    { keyword = "gold balancer",    color = TM.Colors.TWICH.TERTIARY_ACCENT },
     { keyword = "notable item",     color = TM.Colors.TWICH.TERTIARY_ACCENT },
     { keyword = "notable items",    color = TM.Colors.TWICH.TERTIARY_ACCENT },
     { keyword = "gold per hour",    color = TM.Colors.TWICH.TERTIARY_ACCENT },

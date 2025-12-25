@@ -3,6 +3,9 @@
 
     <Include file="..\Tools\!load.xml" />
 
+    <!-- Ensure GoldGoblin module is loaded so its CONFIGURATION exists -->
+    <Include file="GoldGoblin\!load.xml" />
+
     <Include file="Configuration\!load.xml" />
     <Include file="Logger\!load.xml" />
     <Include file="ExtraMedia\!load.xml" />

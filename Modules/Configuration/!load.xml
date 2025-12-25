@@ -6,4 +6,5 @@
     <Include file="Welcome\!load.xml" />
     <Include file="General\!load.xml" />
     <Include file="LootMonitor\!load.xml" />
+    <Include file="GoldGoblin\!load.xml" />
 </Ui>
