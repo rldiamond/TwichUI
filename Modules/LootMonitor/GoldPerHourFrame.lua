@@ -65,12 +65,14 @@ GPHFrame.CONFIGURATION = {
     -- Fonts
     BASE_FONT = { key = "lootMonitor.goldPerHourFrame.font", default = "Expressway" },
     TITLE_FONT_SIZE = { key = "lootMonitor.goldPerHourFrame.titleFontSize", default = 14 },
+    TIME_FONT_SIZE = { key = "lootMonitor.goldPerHourFrame.timeFontSize", default = 13 },
     HEADER_FONT_SIZE = { key = "lootMonitor.goldPerHourFrame.headerFontSize", default = 12 },
     ROW_FONT_SIZE = { key = "lootMonitor.goldPerHourFrame.rowFontSize", default = 11 },
     STATS_FONT_SIZE = { key = "lootMonitor.goldPerHourFrame.statsFontSize", default = 10 },
 
     -- Colors
     TITLE_TEXT_COLOR = { key = "lootMonitor.goldPerHourFrame.titleTextColor", default = { r = 1, g = 1, b = 1 } },
+    TIME_TEXT_COLOR = { key = "lootMonitor.goldPerHourFrame.timeTextColor", default = { r = 1, g = 1, b = 1 } },
     HEADER_BG_COLOR = { key = "lootMonitor.goldPerHourFrame.headerBgColor", default = { r = 0.08, g = 0.08, b = 0.08, a = 1.0 } },
     HEADER_TEXT_COLOR = { key = "lootMonitor.goldPerHourFrame.headerTextColor", default = { r = 0.9, g = 0.9, b = 0.9 } },
 
@@ -253,8 +255,12 @@ function GPHFrame:CreateTitleBar()
         self.CONFIGURATION.BASE_FONT.default)
     local titleFontSize = CM:GetProfileSettingSafe(self.CONFIGURATION.TITLE_FONT_SIZE.key,
         self.CONFIGURATION.TITLE_FONT_SIZE.default)
+    local timeFontSize = CM:GetProfileSettingSafe(self.CONFIGURATION.TIME_FONT_SIZE.key,
+        self.CONFIGURATION.TIME_FONT_SIZE.default)
     local titleColor = CM:GetProfileSettingSafe(self.CONFIGURATION.TITLE_TEXT_COLOR.key,
         self.CONFIGURATION.TITLE_TEXT_COLOR.default)
+    local timeColor = CM:GetProfileSettingSafe(self.CONFIGURATION.TIME_TEXT_COLOR.key,
+        self.CONFIGURATION.TIME_TEXT_COLOR.default)
     local fontPath = LSM:Fetch("font", baseFontName)
 
     -- Title text
@@ -268,8 +274,8 @@ function GPHFrame:CreateTitleBar()
 
     -- Elapsed time text (updated from tracker stats)
     local timeText = titleBar:CreateFontString(nil, "OVERLAY")
-    timeText:SetFont(fontPath, titleFontSize - 1, "OUTLINE")
-    timeText:SetTextColor(titleColor.r, titleColor.g, titleColor.b)
+    timeText:SetFont(fontPath, timeFontSize, "OUTLINE")
+    timeText:SetTextColor(timeColor.r, timeColor.g, timeColor.b)
     timeText:SetText("")
     timeText:SetPoint("RIGHT", titleBar, "RIGHT", -40, 0)
 
@@ -996,6 +1002,7 @@ function GPHFrame:UpdateAllStyling()
     self:UpdateRowTexture()
     self:UpdateRowStyling()
     self:UpdateStatsStyling()
+    self:UpdateTitleStyling()
 end
 
 --- Update title styling (font and color) from configuration
@@ -1012,4 +1019,13 @@ function GPHFrame:UpdateTitleStyling()
 
     self.titleText:SetFont(fontPath, titleFontSize, "OUTLINE")
     self.titleText:SetTextColor(titleColor.r, titleColor.g, titleColor.b)
+
+    if self.timeText then
+        local timeFontSize = CM:GetProfileSettingSafe(self.CONFIGURATION.TIME_FONT_SIZE.key,
+            self.CONFIGURATION.TIME_FONT_SIZE.default)
+        local timeColor = CM:GetProfileSettingSafe(self.CONFIGURATION.TIME_TEXT_COLOR.key,
+            self.CONFIGURATION.TIME_TEXT_COLOR.default)
+        self.timeText:SetFont(fontPath, timeFontSize, "OUTLINE")
+        self.timeText:SetTextColor(timeColor.r, timeColor.g, timeColor.b)
+    end
 end
