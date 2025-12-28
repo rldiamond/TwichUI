@@ -7,6 +7,7 @@ local TM = T:GetModule("Tools")
 
 --- @class DataTextsConfigurationModule
 --- @field Goblin GoblinDataTextConfigurationModule
+--- @field Mounts MountsDataTextConfigurationModule
 --- @field Portals PortalsDataTextConfigurationModule
 local DT = CM.DataTexts or {}
 CM.DataTexts = DT
@@ -83,6 +84,17 @@ function DT:Create(order)
                     end
                 end,
                 CM.DataTexts.Portals:Create()),
+
+            mountsSubmodule = CM.Widgets:SubmoduleGroup(30, "Mounts",
+                "The Mounts datatext provides a fast menu for summoning favorite and utility mounts.",
+                "datatexts.enabled", "datatexts.mounts.enable", function(enabled)
+                    if enabled then
+                        GetDataTextsModule().Mounts:Enable()
+                    else
+                        GetDataTextsModule().Mounts:Disable()
+                    end
+                end,
+                CM.DataTexts.Mounts:Create()),
 
         }
     )

@@ -7,6 +7,7 @@ local T, W, I, C    = unpack(Twich)
 ---@field NotableItemNotificationFrame NotableItemNotificationFrame
 ---@field GoldPerHourTracker GoldPerHourTracker
 ---@field GoldPerHourFrame GoldPerHourFrame
+---@field SimulateLoot fun(self:LootMonitorModule, item:string|number, quantity:number|nil)
 local LM            = T:GetModule("LootMonitor")
 
 LM.EVENTS           = {
@@ -62,7 +63,7 @@ local ITEMINFO_KEYS = {
 -- register a one-time `GET_ITEM_INFO_RECEIVED` listener and invoke the
 -- callback with the table once data becomes available.
 -- @param item string|number itemLink or itemID
---- @param callback fun(info:LootMonitorItemInfo|nil):void|nil optional one-time callback(itemTable)
+--- @param callback fun(info:LootMonitorItemInfo|nil)|nil optional one-time callback(itemTable)
 --- @return LootMonitorItemInfo|nil item info table if available immediately
 local function GetItemInfoTable(item, callback)
     local results = { GetItemInfo(item) }
@@ -90,7 +91,7 @@ local function GetItemInfoTable(item, callback)
                 if not itemID or tonumber(gotItemID) == tonumber(itemID) then
                     waiter:UnregisterEvent("GET_ITEM_INFO_RECEIVED")
                     waiter:SetScript("OnEvent", nil)
-                    local filled = GetItemInfoTable(item)
+                    local filled = GetItemInfoTable(item, nil)
                     if type(callback) == "function" then callback(filled) end
                 end
             end
@@ -183,7 +184,7 @@ local function OnChatMsgLoot(message)
     end
 
     -- get item data as a table; if not cached we'll wait and invoke the callback once available
-    local info = GetItemInfoTable(itemLink)
+    local info = GetItemInfoTable(itemLink, nil)
     if info then
         ---@type LootReceievedEventData
         local eventData = {
@@ -308,4 +309,51 @@ end
 --- @return CallbackInstance callbackHandler module's callback handler
 function LM:GetCallbackHandler()
     return callbackHandler
+end
+
+--- Simulate receiving a loot item.
+--- This will invoke the same internal callback pipeline as a real CHAT_MSG_LOOT message.
+--- @param item string|number itemID, itemLink, or an itemString (e.g. "item:19019")
+--- @param quantity number|nil stack size to simulate
+function LM:SimulateLoot(item, quantity)
+    if not self:IsEnabled() then
+        Logger.Warn("SimulateLoot: Loot Monitor is disabled. Enable Loot Monitor to process simulated loot.")
+        return
+    end
+
+    quantity = tonumber(quantity) or 1
+    if quantity < 1 then quantity = 1 end
+
+    local normalized = item
+    if type(item) == "string" then
+        local trimmed = item:match("^%s*(.-)%s*$")
+        local asNumber = tonumber(trimmed)
+        if asNumber then
+            normalized = asNumber
+        else
+            normalized = trimmed
+        end
+    end
+
+    local function Fire(info)
+        if not info or not info.link then
+            Logger.Error("SimulateLoot: Failed to resolve item info for: " .. tostring(item))
+            return
+        end
+
+        ---@type LootReceievedEventData
+        local eventData = {
+            itemInfo = info,
+            quantity = quantity
+        }
+        callbackHandler:Invoke(LM.EVENTS.LOOT_RECEIVED, eventData)
+    end
+
+    local info = GetItemInfoTable(normalized, function(filled)
+        Fire(filled)
+    end)
+
+    if info then
+        Fire(info)
+    end
 end

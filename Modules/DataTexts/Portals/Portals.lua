@@ -29,6 +29,12 @@ local Module = Tools.Generics.Module:New({
     ENABLED = { key = "datatexts.portals.enable", default = false, },
     COLOR_MODE = { key = "datatexts.portals.colorMode", default = DataTexts.ColorMode.ELVUI },
     CUSTOM_COLOR = { key = "datatexts.portals.customColor", default = DataTexts.DefaultColor },
+
+    DISPLAY_TEXT = { key = "datatexts.portals.displayText", default = "Portals" },
+    SHOW_ICON = { key = "datatexts.portals.showIcon", default = false },
+    ICON_TEXTURE = { key = "datatexts.portals.iconTexture", default = "Interface\\Icons\\Spell_Arcane_PortalOrgrimmar" },
+    ICON_SIZE = { key = "datatexts.portals.iconSize", default = 14 },
+
     -- Default to the regular Hearthstone.
     FAVORITE_HEARTHSTONE_ID = { key = "datatexts.portals.favoriteHearthstoneId", default = 6948 },
 
@@ -184,6 +190,25 @@ function PortalsDataText:UpdateFavoriteClickButton()
     if not self.panel or not CreateFrame then return end
     if InCombatLockdown and InCombatLockdown() then return end
 
+    local function IsActiveOnPanel()
+        local panelText = (self.panel and self.panel.text and self.panel.text.GetText) and self.panel.text:GetText() or
+            nil
+        -- NOTE: This compares the *rendered* display string. ElvUI updates panel.text when datatext assignment changes,
+        -- even if this module doesn't receive an event.
+        return panelText and (panelText == self:GetDisplayText())
+    end
+
+    local function DeactivateOverlay(btn)
+        if not btn then return end
+        btn:EnableMouse(false)
+        btn:SetAttribute("type", nil)
+        btn:SetAttribute("type1", nil)
+        btn:SetAttribute("macrotext", nil)
+        btn:SetAttribute("macrotext1", nil)
+        btn:SetAttribute("ctrl-type1", nil)
+        btn:SetAttribute("ctrl-macrotext1", nil)
+    end
+
     if not self.clickButton then
         -- Secure overlay to allow click-to-cast favorite hearthstone.
         -- NOTE: must be secure to execute protected item/macro actions.
@@ -194,10 +219,39 @@ function PortalsDataText:UpdateFavoriteClickButton()
         btn:EnableMouse(true)
 
         -- Preserve hover UX by forwarding hover events.
-        btn:SetScript("OnEnter", function()
-            self:OnEnter(self.panel)
+        btn:SetScript("OnEnter", function(button)
+            -- If the user swapped this panel away from Portals, immediately disable the overlay so it stops hijacking
+            -- hover and (especially) secure clicks for other datatexts.
+            if not IsActiveOnPanel() then
+                DeactivateOverlay(button)
+            else
+                button:EnableMouse(true)
+            end
+
+            local parent = button and button.GetParent and button:GetParent() or nil
+            if parent and parent.GetScript then
+                local onEnter = parent:GetScript("OnEnter")
+                if onEnter then
+                    onEnter(parent)
+                end
+            end
         end)
-        btn:SetScript("OnLeave", function() end)
+        btn:SetScript("OnLeave", function(button)
+            local parent = button and button.GetParent and button:GetParent() or nil
+            if parent and parent.GetScript then
+                local onLeave = parent:GetScript("OnLeave")
+                if onLeave then
+                    onLeave(parent)
+                end
+            end
+        end)
+
+        -- PreClick runs for secure buttons. Use it to prevent leftover secure actions when the panel isn't Portals.
+        btn:SetScript("PreClick", function(button)
+            if not IsActiveOnPanel() then
+                DeactivateOverlay(button)
+            end
+        end)
 
         self.clickButton = btn
     elseif self.clickButton:GetParent() ~= self.panel then
@@ -217,6 +271,11 @@ function PortalsDataText:UpdateFavoriteClickButton()
     local btn = self.clickButton
     if not btn then return end
 
+    -- Only enable and arm the secure overlay when this panel is currently showing the Portals datatext.
+    -- This must be re-validated lazily because swapping datatexts does not reliably trigger module events.
+    local isActiveOnPanel = IsActiveOnPanel()
+    btn:EnableMouse(isActiveOnPanel and true or false)
+
     -- Clear attributes first.
     btn:SetAttribute("type", nil)
     btn:SetAttribute("type1", nil)
@@ -226,6 +285,10 @@ function PortalsDataText:UpdateFavoriteClickButton()
     -- Clear modifier overrides
     btn:SetAttribute("ctrl-type1", nil)
     btn:SetAttribute("ctrl-macrotext1", nil)
+
+    if not isActiveOnPanel then
+        return
+    end
 
     if favoriteID and available[favoriteID] then
         btn:SetAttribute("type", "macro")
@@ -485,6 +548,15 @@ function PortalsDataText:GetDisplayText()
             Module.CONFIGURATION.COLOR_MODE
         )
 
-        return DataTexts:ColorTextByElvUISetting(colorMode, "Portals", Module.CONFIGURATION.CUSTOM_COLOR)
+        local label = Configuration:GetProfileSettingByConfigEntry(Module.CONFIGURATION.DISPLAY_TEXT) or "Portals"
+        local showIcon = Configuration:GetProfileSettingByConfigEntry(Module.CONFIGURATION.SHOW_ICON)
+        if showIcon then
+            local icon = Configuration:GetProfileSettingByConfigEntry(Module.CONFIGURATION.ICON_TEXTURE)
+                or "Interface\\Icons\\Spell_Arcane_PortalOrgrimmar"
+            local iconSize = Configuration:GetProfileSettingByConfigEntry(Module.CONFIGURATION.ICON_SIZE) or 14
+            label = ("|T%s:%d:%d|t %s"):format(icon, iconSize, iconSize, label)
+        end
+
+        return DataTexts:ColorTextByElvUISetting(colorMode, label, Module.CONFIGURATION.CUSTOM_COLOR)
     end)
 end

@@ -69,6 +69,84 @@ function GDT:Create()
             order = 1,
             args = {
                 description = CM.Widgets:ComponentDescription(1, "Configure what the datatext displays on the panel."),
+
+                displayText = {
+                    type = "input",
+                    name = "Display Text",
+                    desc = "Text shown when Display Mode is set to Default.",
+                    order = 1.5,
+                    width = "full",
+                    hidden = function()
+                        local mode = CM:GetProfileSettingByConfigEntry(GetModule():GetConfiguration().DISPLAY_MODE)
+                        return not (mode and mode.id == "default")
+                    end,
+                    get = function()
+                        return CM:GetProfileSettingByConfigEntry(GetModule():GetConfiguration().DISPLAY_TEXT) or
+                            "Goblin"
+                    end,
+                    set = function(_, value)
+                        CM:SetProfileSettingByConfigEntry(GetModule():GetConfiguration().DISPLAY_TEXT,
+                            (value and value ~= "") and value or "Goblin")
+                        GetModule():Refresh()
+                    end,
+                },
+
+                showIcon = {
+                    type = "toggle",
+                    name = "Show Icon",
+                    desc = "Prefix the datatext with an icon (applies to all display modes).",
+                    order = 1.6,
+                    width = "full",
+                    get = function()
+                        return CM:GetProfileSettingByConfigEntry(GetModule():GetConfiguration().SHOW_ICON)
+                    end,
+                    set = function(_, value)
+                        CM:SetProfileSettingByConfigEntry(GetModule():GetConfiguration().SHOW_ICON, value and true or
+                            false)
+                        GetModule():Refresh()
+                    end,
+                },
+
+                iconTexture = {
+                    type = "input",
+                    name = "Icon Texture",
+                    desc = "Texture path to use when 'Show Icon' is enabled.",
+                    order = 1.7,
+                    width = "full",
+                    disabled = function()
+                        return not CM:GetProfileSettingByConfigEntry(GetModule():GetConfiguration().SHOW_ICON)
+                    end,
+                    get = function()
+                        return CM:GetProfileSettingByConfigEntry(GetModule():GetConfiguration().ICON_TEXTURE) or
+                            "Interface\\Icons\\INV_Misc_Coin_01"
+                    end,
+                    set = function(_, value)
+                        CM:SetProfileSettingByConfigEntry(GetModule():GetConfiguration().ICON_TEXTURE,
+                            (value and value ~= "") and value or "Interface\\Icons\\INV_Misc_Coin_01")
+                        GetModule():Refresh()
+                    end,
+                },
+
+                iconSize = {
+                    type = "range",
+                    name = "Icon Size",
+                    desc = "Icon size (in pixels).",
+                    order = 1.8,
+                    min = 8,
+                    max = 32,
+                    step = 1,
+                    disabled = function()
+                        return not CM:GetProfileSettingByConfigEntry(GetModule():GetConfiguration().SHOW_ICON)
+                    end,
+                    get = function()
+                        return CM:GetProfileSettingByConfigEntry(GetModule():GetConfiguration().ICON_SIZE) or 14
+                    end,
+                    set = function(_, value)
+                        CM:SetProfileSettingByConfigEntry(GetModule():GetConfiguration().ICON_SIZE, value or 14)
+                        GetModule():Refresh()
+                    end,
+                },
+
                 displayMode = {
                     type = "select",
                     name = "Display Mode",

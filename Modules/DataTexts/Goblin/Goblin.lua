@@ -59,6 +59,12 @@ local Module = Tools.Generics.Module:New(
     {
         ENABLED = { key = "datatexts.goblin.enable", default = false },
         DISPLAY_MODE = { key = "datatexts.goblin.displayMode", default = GoblinDataText.DisplayModes.DEFAULT },
+
+        DISPLAY_TEXT = { key = "datatexts.goblin.displayText", default = "Goblin" },
+        SHOW_ICON = { key = "datatexts.goblin.showIcon", default = false },
+        ICON_TEXTURE = { key = "datatexts.goblin.iconTexture", default = "Interface\\Icons\\INV_Misc_Coin_01" },
+        ICON_SIZE = { key = "datatexts.goblin.iconSize", default = 14 },
+
         GOLD_DISPLAY_MODE = { key = "datatexts.goblin.goldDisplayMode", default = "full" },
         COLOR_MODE = { key = "datatexts.goblin.colorMode", default = DataTexts.ColorMode.ELVUI },
         CUSTOM_COLOR = { key = "datatexts.goblin.customColor", default = DataTexts.DefaultColor },
@@ -269,7 +275,7 @@ function GoblinDataText:OnEnter()
         end
 
         DT.tooltip:AddLine(" ")
-        if LootMonitor.GoldPerHourFrame:IsEnabled() then
+        if LootMonitor.GoldPerHourFrame and LootMonitor.GoldPerHourFrame.Enable then
             DT.tooltip:AddLine(TT.Color(CT.TWICH.TEXT_SECONDARY, "Shift-Click to display loot tracker."))
         end
         DT.tooltip:AddLine(TT.Color(CT.TWICH.TEXT_SECONDARY,
@@ -414,6 +420,18 @@ function GoblinDataText:GetDisplayText()
             Module.CONFIGURATION.COLOR_MODE
         )
 
+        local function MaybePrefixIcon(text)
+            local showIcon = Configuration:GetProfileSettingByConfigEntry(Module.CONFIGURATION.SHOW_ICON)
+            if not showIcon then
+                return text
+            end
+
+            local icon = Configuration:GetProfileSettingByConfigEntry(Module.CONFIGURATION.ICON_TEXTURE) or
+                "Interface\\Icons\\INV_Misc_Coin_01"
+            local iconSize = Configuration:GetProfileSettingByConfigEntry(Module.CONFIGURATION.ICON_SIZE) or 14
+            return ("|T%s:%d:%d|t %s"):format(icon, iconSize, iconSize, text or "")
+        end
+
         -- Manual override (Ctrl-Click) and temporary pulse (after loot) force GPH display.
         if self.gphDisplayOverride or self.gphPulseActive then
             displayMode = GoblinDataText.DisplayModes.GPH
@@ -421,27 +439,29 @@ function GoblinDataText:GetDisplayText()
 
         -- default display
         if displayMode.id == GoblinDataText.DisplayModes.DEFAULT.id then
-            return DataTexts:ColorTextByElvUISetting(colorMode, "Goblin", Module.CONFIGURATION.CUSTOM_COLOR)
+            local label = Configuration:GetProfileSettingByConfigEntry(Module.CONFIGURATION.DISPLAY_TEXT) or "Goblin"
+            label = MaybePrefixIcon(label)
+            return DataTexts:ColorTextByElvUISetting(colorMode, label, Module.CONFIGURATION.CUSTOM_COLOR)
         end
 
         -- character gold
         if displayMode.id == GoblinDataText.DisplayModes.CHARACTER_GOLD.id then
-            return FormatCopper(self.accountMoney.character or 0)
+            return MaybePrefixIcon(FormatCopper(self.accountMoney.character or 0))
         end
 
         -- account gold
         if displayMode.id == GoblinDataText.DisplayModes.ACCOUNT_GOLD.id then
-            return FormatCopper(self.accountMoney.total or 0)
+            return MaybePrefixIcon(FormatCopper(self.accountMoney.total or 0))
         end
 
         -- gold per hour
         if displayMode.id == GoblinDataText.DisplayModes.GPH.id then
             self:LazyLoadGPHCallback()
-            return FormatCopper(self.gph and self.gph.goldPerHour or 0)
+            return MaybePrefixIcon(FormatCopper(self.gph and self.gph.goldPerHour or 0))
         end
 
         -- fallback
-        return "Goblin"
+        return MaybePrefixIcon("Goblin")
     end)
 end
 
@@ -537,7 +557,7 @@ function GoblinDataText:OnClick(panel, button)
     local LMM = T:GetModule("LootMonitor")
 
     -- holding shift; show loot tracker
-    if IsShiftKeyDown() and LMM:IsEnabled() and LMM.GoldPerHourTracker:IsEnabled() and LMM.GoldPerHourFrame:IsEnabled() then
+    if IsShiftKeyDown() and LMM:IsEnabled() and LMM.GoldPerHourTracker:IsEnabled() and LMM.GoldPerHourFrame and LMM.GoldPerHourFrame.Enable then
         LMM.GoldPerHourFrame:Enable()
         return
     end

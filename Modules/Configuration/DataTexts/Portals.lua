@@ -39,6 +39,81 @@ function PDT:Create()
             args = {
                 description = CM.Widgets:ComponentDescription(1,
                     "Configure the Portals datatext menu, including which hearthstone is shown first."),
+
+                displayText = {
+                    type = "input",
+                    name = "Display Text",
+                    desc = "Text shown on the datatext panel.",
+                    order = 1.5,
+                    width = "full",
+                    get = function()
+                        return CM:GetProfileSettingByConfigEntry(GetModule():GetConfiguration().DISPLAY_TEXT) or
+                            "Portals"
+                    end,
+                    set = function(_, value)
+                        CM:SetProfileSettingByConfigEntry(GetModule():GetConfiguration().DISPLAY_TEXT,
+                            (value and value ~= "") and value or "Portals")
+                        GetModule():Refresh()
+                    end,
+                },
+
+                showIcon = {
+                    type = "toggle",
+                    name = "Show Icon",
+                    desc = "Prefix the datatext with an icon texture.",
+                    order = 1.6,
+                    width = "full",
+                    get = function()
+                        return CM:GetProfileSettingByConfigEntry(GetModule():GetConfiguration().SHOW_ICON)
+                    end,
+                    set = function(_, value)
+                        CM:SetProfileSettingByConfigEntry(GetModule():GetConfiguration().SHOW_ICON, value and true or
+                            false)
+                        GetModule():Refresh()
+                    end,
+                },
+
+                iconTexture = {
+                    type = "input",
+                    name = "Icon Texture",
+                    desc = "Texture path to use when 'Show Icon' is enabled.",
+                    order = 1.7,
+                    width = "full",
+                    disabled = function()
+                        return not CM:GetProfileSettingByConfigEntry(GetModule():GetConfiguration().SHOW_ICON)
+                    end,
+                    get = function()
+                        return CM:GetProfileSettingByConfigEntry(GetModule():GetConfiguration().ICON_TEXTURE) or
+                            "Interface\\Icons\\Spell_Arcane_PortalOrgrimmar"
+                    end,
+                    set = function(_, value)
+                        CM:SetProfileSettingByConfigEntry(GetModule():GetConfiguration().ICON_TEXTURE,
+                            (value and value ~= "") and value or
+                            "Interface\\Icons\\Spell_Arcane_PortalOrgrimmar")
+                        GetModule():Refresh()
+                    end,
+                },
+
+                iconSize = {
+                    type = "range",
+                    name = "Icon Size",
+                    desc = "Icon size (in pixels).",
+                    order = 1.8,
+                    min = 8,
+                    max = 32,
+                    step = 1,
+                    disabled = function()
+                        return not CM:GetProfileSettingByConfigEntry(GetModule():GetConfiguration().SHOW_ICON)
+                    end,
+                    get = function()
+                        return CM:GetProfileSettingByConfigEntry(GetModule():GetConfiguration().ICON_SIZE) or 14
+                    end,
+                    set = function(_, value)
+                        CM:SetProfileSettingByConfigEntry(GetModule():GetConfiguration().ICON_SIZE, value or 14)
+                        GetModule():Refresh()
+                    end,
+                },
+
                 favoriteHearthstone = {
                     type = "select",
                     name = "Favorite Hearthstone",

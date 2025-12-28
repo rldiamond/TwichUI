@@ -13,6 +13,7 @@ local TM = T:GetModule("Tools")
 --- @field Logger DeveloperLoggerConfigurationModule
 --- @field Databases DeveloperDatabasesConfiguration
 --- @field Convenience DeveloperConvenienceConfiguration
+--- @field Testing DeveloperTestingConfiguration
 CM.Developer = CM.Developer or {}
 
 --- Creates the primary developer configuration panels.
@@ -21,7 +22,7 @@ function CM:CreateDeveloperConfiguration()
     local CT = TM.Colors
     return {
         type = "group",
-        name = "Developer Tools",
+        name = TT.Color(CT.TWICH.TEXT_MUTED, "Developer Tools"),
         order = 100,
         childGroups = "tab",
         args = {
@@ -38,6 +39,7 @@ function CM:CreateDeveloperConfiguration()
             },
             databasesGroup = CM.Developer.Databases:Create(5),
             convenienceGroup = CM.Developer.Convenience:Create(7),
+            testingGroup = CM.Developer.Testing:Create(8),
             loggerGroup = CM.Developer.Logger:Create(10),
         }
 

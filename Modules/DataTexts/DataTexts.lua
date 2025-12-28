@@ -5,6 +5,7 @@ local E = unpack(ElvUI)
 --- @field Goblin GoblinDataText
 --- @field datatexts table
 --- @field Menu Menu
+--- @field Mounts MountsDataText
 --- @field Portals PortalsDataText
 -- DropDown is legacy; prefer DataTextsModule.Menu
 local DataTextsModule = T:GetModule("DataTexts")
@@ -45,6 +46,9 @@ function DataTextsModule:Enable()
     -- initialize any submodules that have been enabled previously
     self.Goblin:OnInitialize()
     self.Portals:OnInitialize()
+    if self.Mounts and self.Mounts.OnInitialize then
+        self.Mounts:OnInitialize()
+    end
 end
 
 function DataTextsModule:Disable()

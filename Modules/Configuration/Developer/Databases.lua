@@ -36,6 +36,8 @@ function DatabasesConfig:Create(order)
                         name = "Clear Gold Database",
                         order = 1,
                         desc = "Clears all stored gold data for all characters on the account.",
+                        confirm = true,
+                        confirmText = "This will permanently clear all stored gold data for all characters. Continue?",
                         func = function()
                             _G.TwichUIGoldDB = {}
                             LM.Info("Cleared TwichUIGoldDB database.")
