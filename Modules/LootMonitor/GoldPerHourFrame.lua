@@ -59,7 +59,8 @@ GPHFrame.CONFIGURATION = {
     FRAME_ALPHA = { key = "lootMonitor.goldPerHourFrame.frameAlpha", default = 1.0 },
     FRAME_TEXTURE = { key = "lootMonitor.goldPerHourFrame.frameTexture", default = "ElvUI Norm" },
     FRAME_BG_COLOR = { key = "lootMonitor.goldPerHourFrame.frameBgColor", default = { r = 0.04, g = 0.04, b = 0.04, a = 0.9 } },
-    FRAME_BORDER_TEXTURE = { key = "lootMonitor.goldPerHourFrame.frameBorderTexture", default = "ElvUI GlowBorder" },
+    -- Default to a thin ElvUI-style border (avoid glow borders by default)
+    FRAME_BORDER_TEXTURE = { key = "lootMonitor.goldPerHourFrame.frameBorderTexture", default = "ElvUI Norm" },
     FRAME_BORDER_COLOR = { key = "lootMonitor.goldPerHourFrame.frameBorderColor", default = { r = 0.3, g = 0.3, b = 0.3, a = 1.0 } },
 
     -- Fonts
@@ -925,13 +926,13 @@ function GPHFrame:UpdateScrollStyling()
         self.CONFIGURATION.SCROLL_BG_COLOR.default)
     local frameTextureName = CM:GetProfileSettingSafe(self.CONFIGURATION.FRAME_TEXTURE.key,
         self.CONFIGURATION.FRAME_TEXTURE.default)
-    local scrollTexture = LSM:Fetch("background", frameTextureName)
+    local scrollTexture = (E and E.media and E.media.blankTex) or LSM:Fetch("background", frameTextureName)
 
     self.scrollFrame:SetBackdrop({
         bgFile = scrollTexture,
         edgeFile = nil,
-        tile = true,
-        tileSize = 16,
+        tile = false,
+        tileSize = 0,
         insets = { left = 2, right = 2, top = 2, bottom = 2 }
     })
     self.scrollFrame:SetBackdropColor(scrollBgColor.r, scrollBgColor.g, scrollBgColor.b, scrollBgColor.a)
@@ -953,13 +954,22 @@ function GPHFrame:UpdateFrameTexture()
     local frameTexture = LSM:Fetch("background", frameTextureName)
     local frameBorderTexture = LSM:Fetch("border", frameBorderTextureName)
 
+    -- Prefer ElvUI media directly when available for a consistent "Transparent" look.
+    if E and E.media then
+        frameTexture = E.media.blankTex or frameTexture
+        frameBorderTexture = E.media.borderTex or frameBorderTexture
+    end
+
+    local edgeSize = (E and E.Border) or 1
+    local inset = (E and E.Spacing) or 1
+
     self.frame:SetBackdrop({
         bgFile = frameTexture,
         edgeFile = frameBorderTexture,
-        tile = true,
-        tileSize = 16,
-        edgeSize = 16,
-        insets = { left = 4, right = 4, top = 4, bottom = 4 }
+        tile = false,
+        tileSize = 0,
+        edgeSize = edgeSize,
+        insets = { left = inset, right = inset, top = inset, bottom = inset }
     })
     self.frame:SetBackdropColor(frameBgColor.r, frameBgColor.g, frameBgColor.b, frameBgColor.a)
     self.frame:SetBackdropBorderColor(frameBorderColor.r, frameBorderColor.g, frameBorderColor.b, frameBorderColor.a)

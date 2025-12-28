@@ -19,10 +19,13 @@ function GG:Enable()
     self.enabled = true
 
     GG.GoldBalancer:OnInitialize()
+    GG.GoldTracker:Initialize()
 end
 
 function GG:Disable()
     GG.GoldBalancer:Disable()
+    GG.GoldTracker:Disable()
+    self.enabled = false
 end
 
 function GG:OnInitialize()

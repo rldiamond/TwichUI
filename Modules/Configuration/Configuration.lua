@@ -283,6 +283,7 @@ local keywordColorMap = {
     { keyword = "performance",      color = TM.Colors.TWICH.TEXT_WARNING },
     { keyword = "TradeSkillMaster", color = TM.Colors.TWICH.GOLD_ACCENT },
     { keyword = "TSM",              color = TM.Colors.TWICH.GOLD_ACCENT },
+    { keyword = "Masque",           color = TM.Colors.TWICH.GOLD_ACCENT },
     { keyword = "coming soon",      color = TM.Colors.TWICH.TEXT_SUCCESS }
 }
 

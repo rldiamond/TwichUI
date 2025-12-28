@@ -49,13 +49,17 @@ function DT:Create(order)
                 order = 4,
                 name = CM:ColorTextKeywords(
                     "Now that the module is enabled, you can find available submodules to the left, under the module's section.\n\n"
-                    .. "Individual datatexts must be enabled before they will appear in ElvUI's datatext configuration.\n\n"
-                    .. "When disabling a datatext submodule, you must reload your UI for the change to fully take effect."),
+                    ..
+                    "Individual datatexts must be enabled before they will appear in ElvUI's datatext configuration. When disabling a datatext submodule, you must reload your UI for the change to fully take effect."),
                 fontSize = "medium",
                 hidden = function()
                     return not CM:GetProfileSettingByConfigEntry(GetDataTextsModule():GetConfiguration().enabled)
                 end,
             },
+
+            menuSpacer = CM.Widgets:Spacer(6),
+
+            menuAppearance = CM.DataTexts.Menu:Create().menuGroup,
 
             goblinSubmodule = CM.Widgets:SubmoduleGroup(10, "Gold Goblin",
                 "The Gold Goblin datatext provides quick access to information related to character and account gold, as well as various gold-making activities.",

@@ -79,6 +79,8 @@ function GT:Initialize()
     if CM:GetProfileSettingByConfigEntry(Module.CONFIGURATION.ENABLE) then
         self:Enable()
     end
+
+    LM.DumpTable(TwichUIGoldDB)
 end
 
 function GT:IsEnabled()

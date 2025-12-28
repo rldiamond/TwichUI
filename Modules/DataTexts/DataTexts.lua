@@ -5,17 +5,14 @@ local E = unpack(ElvUI)
 --- @field Goblin GoblinDataText
 --- @field datatexts table
 --- @field Menu Menu
---- @field DropDown fun(self: DataTextsModule, list: table, frame: Frame, parent: Frame?, ButtonWidth: number?, HideDelay: number?, submenu: string?): nil
+-- DropDown is legacy; prefer DataTextsModule.Menu
 local DataTextsModule = T:GetModule("DataTexts")
 
 --- @type ConfigurationModule
 local CM = T:GetModule("Configuration")
 --- @type ToolsModule
 local TM = T:GetModule("Tools")
-local UIParent = UIParent
-local CreateFrame = CreateFrame
-
-DataTextsModule.menuFrame = CreateFrame("Frame", "TwichUI_DataText_DropDownMenu", UIParent, "BackdropTemplate")
+-- NOTE: Menu frames are created lazily by the Menu submodule.
 
 local Module = TM.Generics.Module:New({
     enabled = { key = "datatexts.enabled", default = false, },

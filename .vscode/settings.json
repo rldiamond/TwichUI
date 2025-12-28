@@ -52,8 +52,9 @@
     "StaticPopupDialogs",
     "StaticPopup_Show",
     "ReloadUI",
-    "BANK"
-  ],
+    "BANK",
+    "Professions"
+],
   "Lua.type.weakUnionCheck": true,
   "Lua.diagnostics.disable": ["assign-type-mismatch"],
   // Editor + Lua formatter indentation settings

@@ -21,7 +21,11 @@ local ThirdPartyAPI = T:GetModule("ThirdPartyAPI")
 --- @field accountMoney table the account gold statistics.
 --- @field moneyUpdateCallbackId integer the ID of the registered money update callback
 --- @field gphUpdateCallbackId integer the ID of the registered GPH update callback
+--- @field lootMonitorCallbackId integer|nil the ID of the registered LootMonitor callback (used for after-loot pulse)
 --- @field gph GoldPerHourData the current gold per hour data
+--- @field gphDisplayOverride boolean|nil when true, forces the datatext to display GPH
+--- @field gphPulseTimer any|nil C_Timer timer handle for temporary GPH display
+--- @field gphPulseActive boolean|nil when true, temporarily displays GPH after loot
 --- @field menuList table the click menu list
 local GoblinDataText = DataTexts.Goblin or {}
 DataTexts.Goblin = GoblinDataText
@@ -58,10 +62,15 @@ local Module = Tools.Generics.Module:New(
         GOLD_DISPLAY_MODE = { key = "datatexts.goblin.goldDisplayMode", default = "full" },
         COLOR_MODE = { key = "datatexts.goblin.colorMode", default = DataTexts.ColorMode.ELVUI },
         CUSTOM_COLOR = { key = "datatexts.goblin.customColor", default = DataTexts.DefaultColor },
+
+        -- Optional: briefly show GPH after loot, then return to configured display.
+        -- Only applies when configured display is NOT GPH and user has not overridden to GPH.
+        SHOW_GPH_AFTER_LOOT = { key = "datatexts.goblin.gphAfterLoot.enabled", default = false },
+        GPH_AFTER_LOOT_DURATION = { key = "datatexts.goblin.gphAfterLoot.durationSeconds", default = 6 },
     }
 )
 
----@alias AddOnEntryConfig { prettyName: string, enabledByDefault: boolean, iconTexture: string, fallbackIconTexture: string|nil, openFunc: function|nil }
+---@alias AddOnEntryConfig { prettyName: string, enabledByDefault: boolean, iconTexture: string, fallbackIconTexture: string|nil, openFunc: function|nil, availableFunc: function|nil }
 
 ---@class GoblinSupportedAddons <string, AddOnEntryConfig> the list of supported third-party addons for the Goblin datatext
 GoblinDataText.SUPPORTED_ADDONS = {
@@ -70,42 +79,42 @@ GoblinDataText.SUPPORTED_ADDONS = {
         enabledByDefault = false,
         iconTexture = "Interface\\AddOns\\TradeSkillMaster\\Media\\Logo",
         fallbackIconTexture = "Interface\\Icons\\INV_Misc_Coin_01",
-        openFunc = ThirdPartyAPI.TSM.Open,
+        openFunc = function() ThirdPartyAPI.TSM:Open() end,
     },
     Journalator = {
-        prettyName = "Journaltor",
+        prettyName = "Journalator",
         enabledByDefault = false,
         iconTexture = "Interface\\AddOns\\Journalator\\Images\\icon",
         fallbackIconTexture = "Interface\\Icons\\INV_Misc_Coin_01",
-        openFunc = ThirdPartyAPI.Journalator.Open,
+        openFunc = function() ThirdPartyAPI.Journalator:Open() end,
     },
     FarmHUD = {
         prettyName = "FarmHUD",
         enabledByDefault = false,
         iconTexture = "Interface\\Icons\\INV_10_Gathering_BioluminescentSpores_Small",
         fallbackIconTexture = nil,
-        openFunc = ThirdPartyAPI.FarmHud.Open,
+        openFunc = function() ThirdPartyAPI.FarmHud:Open() end,
     },
     LootAppraiser = {
         prettyName = "LootAppraiser",
         enabledByDefault = false,
         iconTexture = "Interface\\Icons\\INV_10_Fishing_DragonIslesCoins_Gold",
         fallbackIconTexture = nil,
-        openFunc = ThirdPartyAPI.LootAppraiser.Open,
+        openFunc = function() ThirdPartyAPI.LootAppraiser:Open() end,
     },
     Routes = {
         prettyName = "Routes",
         enabledByDefault = false,
         iconTexture = "Interface\\Icons\\INV_10_DungeonJewelry_Explorer_Trinket_1Compass_Color1",
         fallbackIconTexture = nil,
-        openFunc = ThirdPartyAPI.Routes.Open,
+        openFunc = function() ThirdPartyAPI.Routes:Open() end,
     },
 }
 
---- @param addonName string
+--- @param addon GoblinSupportedAddons
 --- @return ConfigEntry
-function GoblinDataText:GetAddonConfigurationEntry(addonName)
-    local uppercase = string.upper(addonName)
+function GoblinDataText:GetAddonConfigurationEntry(addon)
+    local uppercase = string.upper(addon.prettyName)
     return Module.CONFIGURATION["SHOW_ADDON_" .. uppercase]
 end
 
@@ -132,8 +141,12 @@ local function GetAddonConfgurations()
     local config = {}
     local anyEnabled = false
     for _, addon in pairs(GoblinDataText.SUPPORTED_ADDONS) do
-        local entry = GoblinDataText:GetAddonConfigurationEntry(addon.prettyName)
+        local entry = GoblinDataText:GetAddonConfigurationEntry(addon)
         local enabled = Configuration:GetProfileSettingByConfigEntry(entry)
+        local available = (type(addon.availableFunc) ~= "function") or addon.availableFunc()
+
+        -- Only consider an addon enabled if it's both enabled in settings and available.
+        enabled = enabled and available
         if enabled then
             anyEnabled = true
         end
@@ -243,6 +256,7 @@ function GoblinDataText:OnEnter()
     )
 
     -- if GPH is enabled,
+    ---@type LootMonitorModule
     local LootMonitor = T:GetModule("LootMonitor")
     if LootMonitor:IsEnabled() and LootMonitor.GoldPerHourTracker:IsEnabled() then
         if self.gph then
@@ -255,7 +269,9 @@ function GoblinDataText:OnEnter()
         end
 
         DT.tooltip:AddLine(" ")
-        DT.tooltip:AddLine(TT.Color(CT.TWICH.TEXT_SECONDARY, "Shift-Click to display loot tracker."))
+        if LootMonitor.GoldPerHourFrame:IsEnabled() then
+            DT.tooltip:AddLine(TT.Color(CT.TWICH.TEXT_SECONDARY, "Shift-Click to display loot tracker."))
+        end
         DT.tooltip:AddLine(TT.Color(CT.TWICH.TEXT_SECONDARY,
             "Ctrl-Click to toggle between GPH and configured display modes."))
     end
@@ -280,7 +296,9 @@ function GoblinDataText:OnEvent(panel, event, ...)
         self.displayCache:invalidate()
     end
 
-    panel.text:SetText(self:GetDisplayText())
+    if self.panel then
+        self.panel.text:SetText(self:GetDisplayText())
+    end
 end
 
 local function FormatCopper(copper)
@@ -306,9 +324,83 @@ function GoblinDataText:LazyLoadGPHCallback()
         ---@type LootMonitorModule
         local LootMonitor = T:GetModule("LootMonitor")
 
+        local function CancelPulseTimer()
+            if self.gphPulseTimer then
+                self.gphPulseTimer:Cancel()
+                self.gphPulseTimer = nil
+            end
+        end
+
+        local function IsGPHAvailable()
+            return LootMonitor:IsEnabled() and LootMonitor.GoldPerHourTracker and
+                LootMonitor.GoldPerHourTracker:IsEnabled()
+        end
+
+        local function GetConfiguredDisplayModeId()
+            local mode = Configuration:GetProfileSettingByConfigEntry(Module.CONFIGURATION.DISPLAY_MODE)
+            return mode and mode.id
+        end
+
+        local function IsEffectiveDisplayGPH()
+            if self.gphDisplayOverride then return true end
+            if self.gphPulseActive then return true end
+            return GetConfiguredDisplayModeId() == GoblinDataText.DisplayModes.GPH.id
+        end
+
+        local function StartGPHPulseIfConfigured()
+            if not IsGPHAvailable() then return end
+            if self.gphDisplayOverride then return end
+
+            local configuredId = GetConfiguredDisplayModeId()
+            if configuredId == GoblinDataText.DisplayModes.GPH.id then
+                return
+            end
+
+            if not Configuration:GetProfileSettingByConfigEntry(Module.CONFIGURATION.SHOW_GPH_AFTER_LOOT) then
+                return
+            end
+
+            local duration = Configuration:GetProfileSettingByConfigEntry(Module.CONFIGURATION.GPH_AFTER_LOOT_DURATION) or
+                0
+            if duration <= 0 then return end
+
+            self.gphPulseActive = true
+            CancelPulseTimer()
+            self.gphPulseTimer = C_Timer.NewTimer(duration, function()
+                self.gphPulseActive = false
+                self.gphPulseTimer = nil
+                if self.panel then
+                    self:Refresh()
+                end
+            end)
+        end
+
+        -- Register a LootMonitor callback so we can reliably detect real loot/money events.
+        -- This avoids false triggers from GPH ticker recalculations or sliding-window trimming.
+        if not self.lootMonitorCallbackId and LootMonitor.GetCallbackHandler then
+            local handler = LootMonitor:GetCallbackHandler()
+            if handler and handler.Register then
+                self.lootMonitorCallbackId = handler:Register(function(event, _)
+                    if event == LootMonitor.EVENTS.LOOT_VALUATED or event == LootMonitor.EVENTS.MONEY_RECEIVED then
+                        StartGPHPulseIfConfigured()
+
+                        -- show GPH immediately (value may update a moment later via GPH callback)
+                        if self.panel and self.gphPulseActive then
+                            self:Refresh()
+                        end
+                    end
+                end)
+            end
+        end
+
         --- @param gphData GoldPerHourData
         local function GPHCallbackHandler(gphData)
             self.gph = gphData
+
+            -- If we're currently showing GPH (configured, overridden, or pulsing), refresh the display.
+            if self.panel and IsEffectiveDisplayGPH() then
+                self:Refresh()
+            end
         end
         self.gphUpdateCallbackId = LootMonitor.GoldPerHourTracker:RegisterCallback(GPHCallbackHandler)
     end
@@ -316,12 +408,16 @@ end
 
 function GoblinDataText:GetDisplayText()
     return self.displayCache:get(function()
-        local displayMode = Configuration:GetProfileSettingByConfigEntry(
-            Module.CONFIGURATION.DISPLAY_MODE
-        )
+        local configuredMode = Configuration:GetProfileSettingByConfigEntry(Module.CONFIGURATION.DISPLAY_MODE)
+        local displayMode = configuredMode
         local colorMode = Configuration:GetProfileSettingByConfigEntry(
             Module.CONFIGURATION.COLOR_MODE
         )
+
+        -- Manual override (Ctrl-Click) and temporary pulse (after loot) force GPH display.
+        if self.gphDisplayOverride or self.gphPulseActive then
+            displayMode = GoblinDataText.DisplayModes.GPH
+        end
 
         -- default display
         if displayMode.id == GoblinDataText.DisplayModes.DEFAULT.id then
@@ -376,15 +472,15 @@ function GoblinDataText:BuildClickMenu()
     if profs and #profs > 0 then
         -- header
         insert({
-            text = TT.Color(CT.TWICH.PRIMARY_ACCENT, "Professions"),
+            text = "Professions",
             isTitle = true,
             notClickable = true,
         })
 
         for _, p in ipairs(profs) do
-            local iconTag = p.icon and TT.CreateIconStr(p.icon) or ""
             insert({
-                text = iconTag .. p.name,
+                icon = p.icon,
+                text = p.name,
                 func = function() OpenProfessionByIndex(p.idx) end,
             })
         end
@@ -395,7 +491,7 @@ function GoblinDataText:BuildClickMenu()
     if anyEnabled then
         -- header
         insert({
-            text = TT.Color(CT.TWICH.PRIMARY_ACCENT, "Addons"),
+            text = "Addons",
             isTitle = true,
             notClickable = true,
         })
@@ -410,19 +506,28 @@ function GoblinDataText:BuildClickMenu()
                     icon = config.iconTexture
                 end
 
-                -- default to a space if no icon found to avoid layout issues
-                local iconStr = " "
-                if icon then
-                    iconStr = TT.CreateIconStr(icon)
-                end
-
                 insert({
-                    text = iconStr .. " " .. config.prettyName,
+                    icon = icon,
+                    text = config.prettyName,
                     notCheckable = true,
                     func = config.openFunc
                 })
             end
         end
+    end
+
+    -- Fallback: avoid showing an empty menu frame
+    if #self.menuList == 0 then
+        insert({
+            text = TT.Color(CT.TWICH.PRIMARY_ACCENT, "Menu"),
+            isTitle = true,
+            notClickable = true,
+        })
+        insert({
+            text = TT.Color(CT.TWICH.TEXT_SECONDARY, "No entries available."),
+            isDescription = true,
+            notClickable = true,
+        })
     end
 end
 
@@ -432,20 +537,30 @@ function GoblinDataText:OnClick(panel, button)
     local LMM = T:GetModule("LootMonitor")
 
     -- holding shift; show loot tracker
-    if IsShiftKeyDown() and LMM:IsEnabled() and LMM.GoldPerHourTracker:IsEnabled() then
+    if IsShiftKeyDown() and LMM:IsEnabled() and LMM.GoldPerHourTracker:IsEnabled() and LMM.GoldPerHourFrame:IsEnabled() then
         LMM.GoldPerHourFrame:Enable()
         return
     end
 
     -- holding control; toggle display mode
     if IsControlKeyDown() and LMM:IsEnabled() and LMM.GoldPerHourTracker:IsEnabled() then
-        -- TODO
+        -- Toggle manual override between configured display and GPH.
+        self.gphDisplayOverride = not self.gphDisplayOverride
+
+        -- Cancel any active pulse when explicitly toggling.
+        if self.gphPulseTimer then
+            self.gphPulseTimer:Cancel()
+            self.gphPulseTimer = nil
+        end
+        self.gphPulseActive = false
+
+        self:Refresh()
         return
     end
 
     -- regular click
     GoblinDataText:BuildClickMenu()
-    DataTexts:DropDown(GoblinDataText.menuList, DataTexts.menuFrame, panel, 0, 2, "twichui_goblin")
+    DataTexts.Menu:Toggle("twichui_goblin", panel, GoblinDataText.menuList)
 end
 
 function GoblinDataText:OnEnable()
@@ -500,6 +615,18 @@ function GoblinDataText:Disable()
         local LootMonitor = T:GetModule("LootMonitor")
         LootMonitor.GoldPerHourTracker:UnregisterCallback(self.gphUpdateCallbackId)
         self.gphUpdateCallbackId = nil
+    end
+
+    if self.lootMonitorCallbackId then
+        ---@type LootMonitorModule
+        local LootMonitor = T:GetModule("LootMonitor")
+        if LootMonitor and LootMonitor.GetCallbackHandler then
+            local handler = LootMonitor:GetCallbackHandler()
+            if handler and handler.Unregister then
+                handler:Unregister(self.lootMonitorCallbackId)
+            end
+        end
+        self.lootMonitorCallbackId = nil
     end
 
 

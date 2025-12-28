@@ -257,6 +257,7 @@ function LM:Enable()
     LM.ItemValuator:Enable()
     LM.NotableItemNotificationHandler:Initialize()
     LM.GoldPerHourTracker:Initialize()
+    LM.NotableItemNotificationFrame:Initialize()
 
     -- temporarily registering a callback handler here to debug
     local callbackID = LM.GoldPerHourTracker:RegisterCallback(function(event)

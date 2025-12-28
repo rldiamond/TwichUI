@@ -15,13 +15,53 @@ CM.DataTexts = DT
 local GDT = DT.Goblin or {}
 DT.Goblin = GDT
 
+local DoesAddOnExist = C_AddOns.DoesAddOnExist
+
+local function CreateAddonToggles(startOrder)
+    ---@type GoblinDataText
+    local module = T:GetModule("DataTexts").Goblin
+    local toggles = {}
+    ---@type table<string, AddOnEntryConfig>
+    local addons = module.SUPPORTED_ADDONS
+    local index = startOrder or 1
+    for addon, config in pairs(addons) do
+        local addonName = addon
+        local cfg = config
+
+        toggles[config.prettyName:lower()] = {
+            type = "toggle",
+            name = cfg.prettyName,
+            order = index,
+            desc = "Display the " .. cfg.prettyName .. " addon in the menu that appears when you click the datatext.",
+            get = function()
+                return CM:GetProfileSettingByConfigEntry(module:GetAddonConfigurationEntry(cfg))
+            end,
+            set = function(_, value)
+                CM:SetProfileSettingByConfigEntry(
+                    module:GetAddonConfigurationEntry(cfg),
+                    value
+                )
+            end,
+            disabled = function()
+                if config.availableFunc and type(config.availableFunc) == "function" then
+                    return not config.availableFunc()
+                else
+                    return not DoesAddOnExist(addonName)
+                end
+            end
+        }
+        index = index + 1
+    end
+    return toggles
+end
+
 function GDT:Create()
     ---@return GoblinDataText module
     local function GetModule()
         return T:GetModule("DataTexts").Goblin
     end
 
-    return {
+    local options = {
         displayGroup = {
             type = "group",
             name = "Display",
@@ -73,6 +113,60 @@ function GDT:Create()
                             mode
                         )
                         GetModule():Refresh()
+                    end,
+                },
+
+                gphAfterLootEnabled = {
+                    type = "toggle",
+                    name = "Show GPH After Loot",
+                    desc =
+                    "After looting, temporarily show Gold Per Hour for a short time, then return to the configured display.",
+                    order = 2.1,
+                    hidden = function()
+                        local lmEnabled  = CM:GetProfileSettingSafe("lootMonitor.enable", false)
+                        local gphEnabled = CM:GetProfileSettingSafe("lootMonitor.goldPerHourTracker.enabled", false)
+                        if not (lmEnabled and gphEnabled) then
+                            return true
+                        end
+
+                        local mode = CM:GetProfileSettingByConfigEntry(GetModule():GetConfiguration().DISPLAY_MODE)
+                        return mode and mode.id == "gph"
+                    end,
+                    get = function()
+                        return CM:GetProfileSettingByConfigEntry(GetModule():GetConfiguration().SHOW_GPH_AFTER_LOOT)
+                    end,
+                    set = function(_, value)
+                        CM:SetProfileSettingByConfigEntry(GetModule():GetConfiguration().SHOW_GPH_AFTER_LOOT, value)
+                    end,
+                },
+
+                gphAfterLootDuration = {
+                    type = "range",
+                    name = "GPH Display Duration",
+                    desc = "Seconds to show GPH after loot.",
+                    order = 2.2,
+                    min = 1,
+                    max = 30,
+                    step = 1,
+                    hidden = function()
+                        local lmEnabled  = CM:GetProfileSettingSafe("lootMonitor.enable", false)
+                        local gphEnabled = CM:GetProfileSettingSafe("lootMonitor.goldPerHourTracker.enabled", false)
+                        if not (lmEnabled and gphEnabled) then
+                            return true
+                        end
+
+                        local mode = CM:GetProfileSettingByConfigEntry(GetModule():GetConfiguration().DISPLAY_MODE)
+                        if mode and mode.id == "gph" then
+                            return true
+                        end
+
+                        return not CM:GetProfileSettingByConfigEntry(GetModule():GetConfiguration().SHOW_GPH_AFTER_LOOT)
+                    end,
+                    get = function()
+                        return CM:GetProfileSettingByConfigEntry(GetModule():GetConfiguration().GPH_AFTER_LOOT_DURATION)
+                    end,
+                    set = function(_, value)
+                        CM:SetProfileSettingByConfigEntry(GetModule():GetConfiguration().GPH_AFTER_LOOT_DURATION, value)
                     end,
                 },
                 goldWarning = {
@@ -127,6 +221,23 @@ function GDT:Create()
                     end
                 ),
             }
-        }
+        },
+        addonsGroup = {
+            type = "group",
+            name = "Addons",
+            inline = true,
+            order = 2,
+            args = {
+                description = CM.Widgets:ComponentDescription(1,
+                    "Select which supported addons appear in the datatext's menu that shows when clicked."),
+            }
+        },
     }
+
+    -- AceConfig requires args keys to be strings; merge toggles into the args table.
+    for key, toggle in pairs(CreateAddonToggles(2)) do
+        options.addonsGroup.args[key] = toggle
+    end
+
+    return options
 end
