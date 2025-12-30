@@ -1,3 +1,8 @@
 <Ui xmlns='http://www.blizzard.com/wow/ui/'>
     <Script file="MythicPlus.lua" />
+    <Script file="MythicPlusFrame.lua" />
+    <Script file="Keystone.lua" />
+    <Script file="Dungeons.lua" />
+    <Script file="Database.lua" />
+    <Script file="API.lua" />
 </Ui>

@@ -241,6 +241,126 @@ do
     end
 end
 
+-- Developer convenience: auto-show Mythic+ window on reload/login
+do
+    local auto = {
+        frame = nil,
+        enabled = false,
+        tries = 0,
+        maxTries = 20,
+        delay = 0.2,
+    }
+
+    local function attemptShow()
+        ---@type ConfigurationModule
+        local Configuration = T:GetModule("Configuration")
+        if not Configuration or not Configuration.GetProfileSettingSafe then
+            return false
+        end
+
+        -- If the toggle was turned off, stop immediately.
+        if not Configuration:GetProfileSettingSafe("developer.convenience.autoShowMythicPlusWindow", false) then
+            return true
+        end
+
+        -- Only auto-show when the Mythic+ module is enabled in config.
+        if not Configuration:GetProfileSettingSafe("mythicplus.enabled", false) then
+            return true
+        end
+
+        if _G.InCombatLockdown and _G.InCombatLockdown() then
+            return false
+        end
+
+        ---@type MythicPlusModule
+        local MythicPlus = T:GetModule("MythicPlus")
+        if not MythicPlus then
+            return false
+        end
+
+        if MythicPlus.Enable then
+            local ok, err = pcall(MythicPlus.Enable, MythicPlus)
+            if not ok then
+                return false
+            end
+        end
+
+        if MythicPlus.MainWindow and MythicPlus.MainWindow.Enable then
+            -- Non-persistent open: does not touch saved MAIN_WINDOW_ENABLED state.
+            local ok, err = pcall(MythicPlus.MainWindow.Enable, MythicPlus.MainWindow, false)
+            if not ok then
+                return false
+            end
+
+            local frame = MythicPlus.MainWindow.frame
+            if frame and frame.IsShown and frame:IsShown() then
+                return true
+            end
+
+            return false
+        end
+
+        return false
+    end
+
+    local function tryShow()
+        auto.tries = auto.tries + 1
+        local success = false
+        local ok = pcall(function()
+            success = attemptShow()
+        end)
+
+        if ok and success then
+            if auto.frame then
+                auto.frame:UnregisterEvent("PLAYER_LOGIN")
+            end
+            auto.enabled = false
+            return
+        end
+
+        if auto.tries < auto.maxTries and _G.C_Timer and _G.C_Timer.After then
+            _G.C_Timer.After(auto.delay, tryShow)
+        else
+            auto.enabled = false
+        end
+    end
+
+    function T:StartAutoShowMythicPlusWindow()
+        if auto.enabled then return end
+        auto.enabled = true
+        auto.tries = 0
+
+        if not auto.frame then
+            auto.frame = _G.CreateFrame("Frame")
+            auto.frame:SetScript("OnEvent", function(self, event, ...)
+                if event == "PLAYER_LOGIN" or event == "PLAYER_ENTERING_WORLD" then
+                    -- Reset tries when we actually enter the world; UIParent visibility is stable here.
+                    if event == "PLAYER_ENTERING_WORLD" then
+                        auto.tries = 0
+                    end
+                    if _G.C_Timer and _G.C_Timer.After then
+                        _G.C_Timer.After(0.2, tryShow)
+                    else
+                        tryShow()
+                    end
+                end
+            end)
+        end
+
+        auto.frame:RegisterEvent("PLAYER_LOGIN")
+        auto.frame:RegisterEvent("PLAYER_ENTERING_WORLD")
+    end
+
+    function T:StopAutoShowMythicPlusWindow()
+        if not auto.enabled then return end
+        auto.enabled = false
+        if auto.frame then
+            auto.frame:UnregisterEvent("PLAYER_LOGIN")
+            auto.frame:UnregisterEvent("PLAYER_ENTERING_WORLD")
+        end
+    end
+end
+
 --- Called by AceAddon when the addon is initialized. Sets up the database baseline, configures addon configuration panel, and registers events.
 function T:OnInitialize()
     ---@type LoggerModule
@@ -281,4 +401,7 @@ function T:OnInitialize()
         -- Start the auto-open handler (can be enabled/disabled via Start/Stop)
         pcall(function() T:StartAutoOpenOptions() end)
     end
+
+    -- Start the handler unconditionally; it no-ops and stops itself unless the toggle is enabled.
+    pcall(function() T:StartAutoShowMythicPlusWindow() end)
 end
