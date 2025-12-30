@@ -161,6 +161,15 @@ local function UpdateActions(panel, mapId)
 
     panel.__twichuiActions.portalSpellId = spellId
     panel.__twichuiActions.portalUnlocked = unlocked
+
+    -- Update MDT Button visibility
+    if panel.__twichuiActions.mdtButton then
+        if _G.MDungeonTools or _G.MDT then
+            panel.__twichuiActions.mdtButton:Show()
+        else
+            panel.__twichuiActions.mdtButton:Hide()
+        end
+    end
 end
 
 local function GetFontPath()
@@ -448,10 +457,10 @@ local function SetClampedTexture(tex, texture)
 
     tex.__twichuiSourceAspect = sourceAspect
 
-    Dbg(string.format(
-        "SetTexture(%s) baseUV=[%.3f %.3f %.3f %.3f] aspect=%s",
-        tostring(texture), baseLeft, baseRight, baseTop, baseBottom, tostring(sourceAspect)
-    ))
+    -- Dbg(string.format(
+    --     "SetTexture(%s) baseUV=[%.3f %.3f %.3f %.3f] aspect=%s",
+    --     tostring(texture), baseLeft, baseRight, baseTop, baseBottom, tostring(sourceAspect)
+    -- ))
 
     if tex.SetHorizTile then
         pcall(tex.SetHorizTile, tex, false)
@@ -727,12 +736,12 @@ local function ApplyRowLayout(tex, zoom)
         pcall(tex.SetGradient, tex, "HORIZONTAL", _G.CreateColor(1, 1, 1, startAlpha), _G.CreateColor(0, 0, 0, 0))
     end
 
-    if IsDebugEnabled() then
-        Dbg(string.format(
-            "RowLayout w=%.1f h=%.1f aspect=%.3f zoom=%.3f scale=%.3f size=(%.1f,%.1f)",
-            w, h, aspect, z, scale, drawW, drawH
-        ))
-    end
+    -- if IsDebugEnabled() then
+    --     Dbg(string.format(
+    --         "RowLayout w=%.1f h=%.1f aspect=%.3f zoom=%.3f scale=%.3f size=(%.1f,%.1f)",
+    --         w, h, aspect, z, scale, drawW, drawH
+    --     ))
+    -- end
 end
 
 ---@param tex Texture
@@ -817,12 +826,12 @@ local function ApplyHeaderLayout(tex, zoom)
         pcall(tex.SetGradient, tex, "HORIZONTAL", _G.CreateColor(1, 1, 1, startAlpha), _G.CreateColor(1, 1, 1, 0))
     end
 
-    if IsDebugEnabled() then
-        Dbg(string.format(
-            "HeaderLayout w=%.1f h=%.1f aspect=%.3f drawH=%.1f UV=[%.2f,%.2f,%.2f,%.2f]",
-            w, h, aspect, drawH, uMin, uMax, vMin, vMax
-        ))
-    end
+    -- if IsDebugEnabled() then
+    --     Dbg(string.format(
+    --         "HeaderLayout w=%.1f h=%.1f aspect=%.3f drawH=%.1f UV=[%.2f,%.2f,%.2f,%.2f]",
+    --         w, h, aspect, drawH, uMin, uMax, vMin, vMax
+    --     ))
+    -- end
 end
 
 local function SafeCall(fn, ...)
@@ -864,28 +873,28 @@ GetMapUIInfo = function(mapId)
 
     if type(C_ChallengeMode.GetMapUIInfo) == "function" then
         local name, _, timeLimitSeconds, texture, backgroundTexture = C_ChallengeMode.GetMapUIInfo(mapId)
-        if IsDebugEnabled() then
-            Dbg(string.format(
-                "GetMapUIInfo(%d) -> texture=%s (%s) bg=%s (%s)",
-                tonumber(mapId) or -1,
-                tostring(texture), type(texture),
-                tostring(backgroundTexture), type(backgroundTexture)
-            ))
-        end
+        -- if IsDebugEnabled() then
+        --     Dbg(string.format(
+        --         "GetMapUIInfo(%d) -> texture=%s (%s) bg=%s (%s)",
+        --         tonumber(mapId) or -1,
+        --         tostring(texture), type(texture),
+        --         tostring(backgroundTexture), type(backgroundTexture)
+        --     ))
+        -- end
         return name, tonumber(timeLimitSeconds), texture, backgroundTexture
     end
 
     if type(C_ChallengeMode.GetMapInfo) == "function" then
         local info = C_ChallengeMode.GetMapInfo(mapId)
         if type(info) == "table" then
-            if IsDebugEnabled() then
-                Dbg(string.format(
-                    "GetMapInfo(%d) -> texture=%s (%s) bg=%s (%s)",
-                    tonumber(mapId) or -1,
-                    tostring(info.texture), type(info.texture),
-                    tostring(info.backgroundTexture), type(info.backgroundTexture)
-                ))
-            end
+            -- if IsDebugEnabled() then
+            --     Dbg(string.format(
+            --         "GetMapInfo(%d) -> texture=%s (%s) bg=%s (%s)",
+            --         tonumber(mapId) or -1,
+            --         tostring(info.texture), type(info.texture),
+            --         tostring(info.backgroundTexture), type(info.backgroundTexture)
+            --     ))
+            -- end
             return info.name, tonumber(info.timeLimitSeconds or info.timeLimit), info.texture, info.backgroundTexture
         end
     end
@@ -1982,6 +1991,122 @@ local function CreateDungeonsPanel(parent)
         end
     end)
 
+    -- MDT Button
+    local mdtButton = CreateFrame("Button", nil, detailsHeader)
+    mdtButton:SetSize(26, 26)
+    mdtButton:SetPoint("RIGHT", portalButton, "LEFT", -8, 0)
+
+    local mdtIcon = mdtButton:CreateTexture(nil, "ARTWORK")
+    mdtIcon:SetAllPoints(mdtButton)
+    mdtIcon:SetTexture("Interface\\AddOns\\TwichUI\\Media\\Textures\\MDTFull.tga")
+    mdtIcon:SetVertexColor(0.7, 0.7, 0.7) -- Default darkened state
+
+    mdtButton:SetScript("OnEnter", function(self)
+        mdtIcon:SetVertexColor(1, 1, 1) -- Brighten on hover
+        if not _G.GameTooltip then return end
+        _G.GameTooltip:SetOwner(self, "ANCHOR_TOP")
+        _G.GameTooltip:AddLine("Mythic Dungeon Tools")
+        _G.GameTooltip:AddLine("Click to open map.", 1, 1, 1, true)
+        _G.GameTooltip:Show()
+    end)
+    mdtButton:SetScript("OnLeave", function(self)
+        mdtIcon:SetVertexColor(0.7, 0.7, 0.7) -- Return to darkened state
+        if _G.GameTooltip then _G.GameTooltip:Hide() end
+    end)
+
+    mdtButton:SetScript("OnClick", function()
+        local MDT = _G.MDungeonTools or _G.MDT
+        if not MDT then return end
+
+        local isShown = MDT.main_frame and MDT.main_frame:IsShown()
+        if not isShown and MDT.ShowInterface then
+            MDT:ShowInterface()
+        end
+
+        local mapId = panel.__twichuiSelectedMapId
+        if not mapId then return end
+
+        local targetName = GetMapUIInfo(mapId)
+        if not targetName then return end
+
+        local function Normalize(str)
+            return str:lower():gsub("[^%w]", "")
+        end
+
+        local function UpdateMDT()
+            -- Try to find the dungeon in MDT's dungeonList
+            local dungeonList = MDT.dungeonList or (MDT.GetDungeonList and MDT:GetDungeonList())
+            local targetNorm = Normalize(targetName)
+            local bestMatchId = nil
+            local bestMatchScore = 0
+
+            local function CheckMatch(id, name)
+                if not name then return end
+                local nameNorm = Normalize(name)
+
+                -- Exact match (normalized)
+                if nameNorm == targetNorm then
+                    return 100
+                end
+
+                -- Substring match
+                if nameNorm:find(targetNorm, 1, true) or targetNorm:find(nameNorm, 1, true) then
+                    -- Score based on length similarity to prefer closer matches
+                    local lenDiff = math.abs(#nameNorm - #targetNorm)
+                    return 50 - lenDiff -- Shorter difference is better
+                end
+
+                return 0
+            end
+
+            if dungeonList then
+                for idx, dungeonName in pairs(dungeonList) do
+                    local nameStr = (type(dungeonName) == "table") and dungeonName.name or dungeonName
+                    if type(nameStr) == "string" then
+                        local score = CheckMatch(idx, nameStr)
+                        if score > bestMatchScore then
+                            bestMatchScore = score
+                            bestMatchId = idx
+                        end
+                    end
+                end
+            end
+
+            -- Fallback: Try iterating GetDungeonName with a wider range if dungeonList wasn't found or matched
+            if bestMatchScore < 100 and MDT.GetDungeonName then
+                -- MDT indices are often not 1-based sequential integers (e.g. they might be dungeon IDs)
+                -- We'll try a reasonable range of IDs.
+                for i = 1, 500 do
+                    local name = MDT:GetDungeonName(i)
+                    if name then
+                        local score = CheckMatch(i, name)
+                        if score > bestMatchScore then
+                            bestMatchScore = score
+                            bestMatchId = i
+                        end
+                    end
+                end
+            end
+
+            if bestMatchId and MDT.UpdateToDungeon then
+                MDT:UpdateToDungeon(bestMatchId)
+            end
+        end
+
+        if not isShown then
+            -- If we just opened it, delay slightly to let MDT initialize/render
+            C_Timer.After(0.1, UpdateMDT)
+        else
+            UpdateMDT()
+        end
+    end)
+
+    if _G.MDungeonTools or _G.MDT then
+        mdtButton:Show()
+    else
+        mdtButton:Hide()
+    end
+
     -- Runs Table Container
     local runsContainer = CreateFrame("Frame", nil, right)
     runsContainer:SetPoint("TOPLEFT", detailsHeader, "BOTTOMLEFT", 0, -16)
@@ -2064,6 +2189,7 @@ local function CreateDungeonsPanel(parent)
         portalHover = portalHover,
         portalSpellId = nil,
         portalUnlocked = false,
+        mdtButton = mdtButton,
     }
 
     panel.__twichuiLeft = left
