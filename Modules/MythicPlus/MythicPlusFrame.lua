@@ -52,7 +52,7 @@ MythicPlusModule.MainWindow = MainWindow
 ---@field onShow fun(panelFrame:Frame, window:MythicPlusMainWindow)|nil
 ---@field onHide fun(panelFrame:Frame, window:MythicPlusMainWindow)|nil
 
-local NAV_WIDTH = 120
+local NAV_WIDTH = 80
 local NAV_BUTTON_HEIGHT = 22
 local NAV_PADDING = 6
 

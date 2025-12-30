@@ -124,3 +124,16 @@ end
 function DungeonMonitor:UnregisterCallback(handle)
     CallbackHandler:Unregister(handle)
 end
+
+--- Simulate a dungeon event by forwarding it through the same callback pipeline.
+--- This is intended for developer tooling (e.g. Simulator) and does not require the
+--- event to be registered on the underlying event frame.
+---@param event string
+---@param ... any
+function DungeonMonitor:SimulateEvent(event, ...)
+    if not self.enabled then
+        Logger.Warn("Dungeon monitor is disabled; simulated event dropped: " .. tostring(event))
+        return
+    end
+    self:EventHandler(event, ...)
+end

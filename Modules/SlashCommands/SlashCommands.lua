@@ -86,6 +86,31 @@ SC.COMMANDS = {
                     ))
                 end,
             },
+            simulate = {
+                description = "Open the Mythic+ Simulator (paste run-log JSON to replay)",
+                handler = function()
+                    local ok, mythicPlus = pcall(function() return T:GetModule("MythicPlus") end)
+                    if not ok or not mythicPlus then
+                        TT.PrintToChatFrame(PrefixWithAddonName(
+                            TT.Color(CT.TWICH.TEXT_ERROR, "MythicPlus module is not available")
+                        ))
+                        return
+                    end
+
+                    local sim = mythicPlus.Simulator
+                    if sim and type(sim.ToggleFrame) == "function" then
+                        if type(sim.Initialize) == "function" then
+                            sim:Initialize()
+                        end
+                        sim:ToggleFrame()
+                        return
+                    end
+
+                    TT.PrintToChatFrame(PrefixWithAddonName(
+                        TT.Color(CT.TWICH.TEXT_ERROR, "Simulator is not available")
+                    ))
+                end,
+            },
         },
     },
 }

@@ -1,96 +1,850 @@
 --[[
-    Mythic+ Simulator allows testing of various addon components without running dungeons over and over.
-    If the Simulator is enabled, and a call is made to a supported function in the API, then the call is instead
-    routed here, and a simulated response is returned.
+    Mythic+ Simulator replays an exported TwichUI Mythic+ run log (TwichUI_RunLog_v2)
+    and forwards events through the MythicPlus DungeonMonitor callback pipeline.
+
+    This is a developer tool to help validate downstream modules and to iterate on
+    systems without repeatedly running live keys.
 ]]
 
+---@diagnostic disable-next-line: undefined-global
 local T = unpack(Twich)
+
+local _G = _G
+local CreateFrame = _G.CreateFrame
+local UIParent = _G.UIParent
+local GetTime = _G.GetTime
+local C_Timer = _G.C_Timer
+
+-- Optional ElvUI integration for skinned buttons, etc.
+---@diagnostic disable-next-line: undefined-field
+local E = _G.ElvUI and _G.ElvUI[1]
+local Skins = E and E.GetModule and E:GetModule("Skins", true)
 
 ---@type MythicPlusModule
 local MythicPlusModule = T:GetModule("MythicPlus")
 ---@class MythicPlusSimulatorSubmodule
 ---@field enabled boolean
+---@field SupportedEvents string[]
+---@field SimEvent fun(self:MythicPlusSimulatorSubmodule, eventName:string)
+---@field _frame Frame|nil
+---@field _editBox EditBox|nil
+---@field _simToken number|nil
+---@field _simState table|nil
+---@field _restoreRunLoggerEnabled boolean|nil
 local Sim = MythicPlusModule.Simulator or {}
 MythicPlusModule.Simulator = Sim
 
-local EventSim = Sim.EventSim or {}
-Sim.EventSim = EventSim
-
 ---@type LoggerModule
 local Logger = T:GetModule("Logger")
+---@type ToolsModule
+local Tools = T:GetModule("Tools")
+---@type ConfigurationModule
+local CM = T:GetModule("Configuration")
+
+---@return MythicPlusDungeonMonitorSubmodule|nil
+local function GetDungeonMonitor()
+    if MythicPlusModule and MythicPlusModule.DungeonMonitor then
+        return MythicPlusModule.DungeonMonitor
+    end
+
+    local ok, mp = pcall(function() return T:GetModule("MythicPlus") end)
+    if ok and mp then
+        return mp.DungeonMonitor
+    end
+
+    return nil
+end
+
+---@type table<string, ConfigEntry>
+local CONFIGURATION = {
+    PLAYBACK_SPEED = { key = "developer.mythicplus.simulator.playbackSpeed", default = 10 },
+}
+
+local Module = Tools.Generics.Module:New(CONFIGURATION)
+
+-- Back-compat for the Developer -> Testing panel.
+-- This list is used to populate a dropdown of "single event" simulations.
+Sim.SupportedEvents = Sim.SupportedEvents or {
+    "CHALLENGE_MODE_START",
+    "CHALLENGE_MODE_COMPLETED_REWARDS",
+    "CHALLENGE_MODE_RESET",
+    "ENCOUNTER_START",
+    "ENCOUNTER_END",
+    "PLAYER_DEAD",
+    "GROUP_ROSTER_UPDATE",
+    "CHAT_MSG_LOOT",
+}
+
+---@param eventName string
+---@return any ...
+local function BuildSampleEventArgs(eventName)
+    if eventName == "CHALLENGE_MODE_START" then
+        return 525
+    end
+
+    if eventName == "CHALLENGE_MODE_COMPLETED_REWARDS" then
+        local mapID = 525
+        local medal = 3
+        local timeMS = 1500000
+        local money = 500000
+        local rewards = {
+            {
+                rewardID = 32837,
+                quantity = 1,
+                displayInfoID = nil,
+                isCurrency = false,
+            },
+        }
+        return mapID, medal, timeMS, money, rewards
+    end
+
+    if eventName == "CHALLENGE_MODE_RESET" then
+        return 525
+    end
+
+    if eventName == "ENCOUNTER_START" then
+        return 1, "Boss", 8, 5
+    end
+
+    if eventName == "ENCOUNTER_END" then
+        return 1, "Boss", 8, 5, 1
+    end
+
+    if eventName == "PLAYER_DEAD" then
+        return nil
+    end
+
+    if eventName == "GROUP_ROSTER_UPDATE" then
+        return nil
+    end
+
+    if eventName == "CHAT_MSG_LOOT" then
+        return "You receive loot: [Example Item]", "Player-Realm"
+    end
+
+    return nil
+end
+
+--- Simulate a single supported event (developer testing helper).
+---@param eventName string
+function Sim:SimEvent(eventName)
+    eventName = tostring(eventName or "")
+    if eventName == "" then
+        Logger.Warn("Simulator: no event provided")
+        return
+    end
+
+    -- Ensure Mythic+ + DungeonMonitor are enabled so callbacks fire normally.
+    if MythicPlusModule and type(MythicPlusModule.IsEnabled) == "function" and type(MythicPlusModule.Enable) == "function" then
+        if not MythicPlusModule:IsEnabled() then
+            MythicPlusModule:Enable()
+        end
+    end
+    local dungeonMonitor = GetDungeonMonitor()
+    if dungeonMonitor and type(dungeonMonitor.Enable) == "function" and not dungeonMonitor.enabled then
+        dungeonMonitor:Enable()
+    end
+
+    if not dungeonMonitor
+        or (type(dungeonMonitor.SimulateEvent) ~= "function" and type(dungeonMonitor.EventHandler) ~= "function") then
+        Logger.Error("Simulator: DungeonMonitor not available")
+        return
+    end
+
+    Logger.Debug("Simulator: simulating event: " .. eventName)
+    local a1, a2, a3, a4, a5 = BuildSampleEventArgs(eventName)
+
+    if type(dungeonMonitor.SimulateEvent) == "function" then
+        dungeonMonitor:SimulateEvent(eventName, a1, a2, a3, a4, a5)
+    else
+        dungeonMonitor:EventHandler(eventName, a1, a2, a3, a4, a5)
+    end
+end
+
+local function ClampNumber(v, min, max, fallback)
+    v = tonumber(v)
+    if type(v) ~= "number" then
+        return fallback
+    end
+    if v < min then return min end
+    if v > max then return max end
+    return v
+end
+
+-- ----------------------------
+-- Minimal JSON decoder
+-- ----------------------------
+
+---@param s string
+---@param i number
+---@return number
+local function SkipWS(s, i)
+    while true do
+        local c = s:sub(i, i)
+        if c == "" then return i end
+        if c ~= " " and c ~= "\t" and c ~= "\r" and c ~= "\n" then
+            return i
+        end
+        i = i + 1
+    end
+end
+
+---@param s string
+---@param i number
+---@return string|nil
+---@return number
+---@return string|nil
+local function ParseString(s, i)
+    if s:sub(i, i) ~= '"' then
+        return nil, i, "expected string"
+    end
+    i = i + 1
+    local out = {}
+    while true do
+        local c = s:sub(i, i)
+        if c == "" then
+            return nil, i, "unterminated string"
+        end
+        if c == '"' then
+            i = i + 1
+            return table.concat(out), i, nil
+        end
+        if c == "\\" then
+            local esc = s:sub(i + 1, i + 1)
+            if esc == '"' or esc == "\\" or esc == "/" then
+                out[#out + 1] = esc
+                i = i + 2
+            elseif esc == "b" then
+                out[#out + 1] = "\b"; i = i + 2
+            elseif esc == "f" then
+                out[#out + 1] = "\f"; i = i + 2
+            elseif esc == "n" then
+                out[#out + 1] = "\n"; i = i + 2
+            elseif esc == "r" then
+                out[#out + 1] = "\r"; i = i + 2
+            elseif esc == "t" then
+                out[#out + 1] = "\t"; i = i + 2
+            elseif esc == "u" then
+                local hex = s:sub(i + 2, i + 5)
+                if not hex:match("^%x%x%x%x$") then
+                    return nil, i, "invalid unicode escape"
+                end
+                local code = tonumber(hex, 16)
+                -- Best-effort: keep ASCII; otherwise replace with '?'
+                if code and code >= 32 and code <= 126 then
+                    out[#out + 1] = string.char(code)
+                else
+                    out[#out + 1] = "?"
+                end
+                i = i + 6
+            else
+                return nil, i, "invalid escape"
+            end
+        else
+            out[#out + 1] = c
+            i = i + 1
+        end
+    end
+end
+
+---@param s string
+---@param i number
+---@return number|nil
+---@return number
+---@return string|nil
+local function ParseNumber(s, i)
+    local start = i
+    local c = s:sub(i, i)
+    if c == "-" then
+        i = i + 1
+    end
+    while s:sub(i, i):match("%d") do
+        i = i + 1
+    end
+    if s:sub(i, i) == "." then
+        i = i + 1
+        while s:sub(i, i):match("%d") do
+            i = i + 1
+        end
+    end
+    local exp = s:sub(i, i)
+    if exp == "e" or exp == "E" then
+        i = i + 1
+        local sign = s:sub(i, i)
+        if sign == "+" or sign == "-" then
+            i = i + 1
+        end
+        while s:sub(i, i):match("%d") do
+            i = i + 1
+        end
+    end
+    local numStr = s:sub(start, i - 1)
+    local n = tonumber(numStr)
+    if type(n) ~= "number" then
+        return nil, start, "invalid number"
+    end
+    return n, i, nil
+end
+
+local ParseValue
+
+---@param s string
+---@param i number
+---@return table|nil
+---@return number
+---@return string|nil
+local function ParseArray(s, i)
+    if s:sub(i, i) ~= "[" then
+        return nil, i, "expected array"
+    end
+    i = i + 1
+    local out = {}
+    i = SkipWS(s, i)
+    if s:sub(i, i) == "]" then
+        return out, i + 1, nil
+    end
+    while true do
+        local v, ni, err = ParseValue(s, i)
+        if err then return nil, i, err end
+        out[#out + 1] = v
+        i = SkipWS(s, ni)
+        local c = s:sub(i, i)
+        if c == "," then
+            i = SkipWS(s, i + 1)
+        elseif c == "]" then
+            return out, i + 1, nil
+        else
+            return nil, i, "expected ',' or ']'"
+        end
+    end
+end
+
+---@param s string
+---@param i number
+---@return table|nil
+---@return number
+---@return string|nil
+local function ParseObject(s, i)
+    if s:sub(i, i) ~= "{" then
+        return nil, i, "expected object"
+    end
+    i = i + 1
+    local out = {}
+    i = SkipWS(s, i)
+    if s:sub(i, i) == "}" then
+        return out, i + 1, nil
+    end
+    while true do
+        local key, ni, err = ParseString(s, i)
+        if err then return nil, i, err end
+        if key == nil then
+            return nil, i, "invalid object key"
+        end
+        i = SkipWS(s, ni)
+        if s:sub(i, i) ~= ":" then
+            return nil, i, "expected ':'"
+        end
+        i = SkipWS(s, i + 1)
+        local v, ni2, err2 = ParseValue(s, i)
+        if err2 then return nil, i, err2 end
+        out[key] = v
+        i = SkipWS(s, ni2)
+        local c = s:sub(i, i)
+        if c == "," then
+            i = SkipWS(s, i + 1)
+        elseif c == "}" then
+            return out, i + 1, nil
+        else
+            return nil, i, "expected ',' or '}'"
+        end
+    end
+end
+
+ParseValue = function(s, i)
+    i = SkipWS(s, i)
+    local c = s:sub(i, i)
+    if c == '"' then
+        return ParseString(s, i)
+    end
+    if c == "{" then
+        return ParseObject(s, i)
+    end
+    if c == "[" then
+        return ParseArray(s, i)
+    end
+    if c == "-" or c:match("%d") then
+        return ParseNumber(s, i)
+    end
+    local tail = s:sub(i)
+    if tail:sub(1, 4) == "true" then
+        return true, i + 4, nil
+    end
+    if tail:sub(1, 5) == "false" then
+        return false, i + 5, nil
+    end
+    if tail:sub(1, 4) == "null" then
+        return nil, i + 4, nil
+    end
+    return nil, i, "unexpected token"
+end
+
+---@param s string
+---@return any|nil
+---@return string|nil
+local function DecodeJSON(s)
+    if type(s) ~= "string" or s == "" then
+        return nil, "empty input"
+    end
+    local v, i, err = ParseValue(s, 1)
+    if err then
+        return nil, err
+    end
+    i = SkipWS(s, i)
+    if i <= #s then
+        -- allow trailing whitespace; otherwise fail
+        if s:sub(i):match("^%s*$") then
+            return v, nil
+        end
+        return nil, "trailing characters"
+    end
+    return v, nil
+end
+
+-- ----------------------------
+-- Simulation engine
+-- ----------------------------
+
+local function GetConfiguredSpeed()
+    local speed = CM:GetProfileSettingSafe(CONFIGURATION.PLAYBACK_SPEED.key, nil)
+    if type(speed) ~= "number" then
+        speed = CM:GetProfileSettingByConfigEntry(CONFIGURATION.PLAYBACK_SPEED)
+    end
+    return ClampNumber(speed, 0.1, 50, 10)
+end
+
+function Sim:IsSimulating()
+    return self._simState ~= nil
+end
+
+function Sim:StopSimulation()
+    if not self._simState then
+        return
+    end
+    self._simToken = (self._simToken or 0) + 1
+    self._simState = nil
+    Logger.Info("Simulator: stopped")
+
+    if self._restoreRunLoggerEnabled then
+        self._restoreRunLoggerEnabled = nil
+        local rl = MythicPlusModule and MythicPlusModule.RunLogger
+        if rl and type(rl.Enable) == "function" then
+            rl:Enable()
+        end
+    end
+end
+
+---@param ev table
+---@return string
+local function EventName(ev)
+    return tostring(ev and (ev.name or ev.event or ev.type) or "unknown")
+end
+
+---@param ev table
+---@return number
+local function EventRel(ev)
+    local r = ev and (ev.relSeconds or ev.rel or 0)
+    r = tonumber(r) or 0
+    if r < 0 then r = 0 end
+    return r
+end
+
+---@param ev table
+---@return any
+local function EventPayload(ev)
+    return ev and (ev.payload or {}) or {}
+end
+
+---@param name string
+---@param payload any
+local function BuildDungeonArgs(name, payload)
+    if type(payload) ~= "table" then
+        payload = {}
+    end
+
+    if name == "CHALLENGE_MODE_START" then
+        return payload.mapId
+    end
+    if name == "CHALLENGE_MODE_COMPLETED_REWARDS" then
+        return payload.mapId, payload.medal, payload.timeMS, payload.money, payload.rewards
+    end
+    if name == "CHALLENGE_MODE_RESET" then
+        return payload.mapId
+    end
+    if name == "ENCOUNTER_START" then
+        return payload.encounterID, payload.encounterName, payload.difficultyID, payload.groupSize
+    end
+    if name == "ENCOUNTER_END" then
+        return payload.encounterID, payload.encounterName, payload.difficultyID, payload.groupSize, payload.success
+    end
+    if name == "PLAYER_ENTERING_WORLD" then
+        return payload.isInitialLogin, payload.isReloadingUi
+    end
+    if name == "CHAT_MSG_LOOT" then
+        return payload.message, payload.player
+    end
+    if name == "GROUP_ROSTER_SNAPSHOT" then
+        return payload.group, payload.reason
+    end
+
+    if payload.args and type(payload.args) == "table" then
+        return unpack(payload.args)
+    end
+
+    return nil
+end
+
+---@param ev table
+---@param index number
+---@param total number
+function Sim:_LogStage(ev, index, total)
+    local name = EventName(ev)
+    if name == "CHALLENGE_MODE_START" or name == "CHALLENGE_MODE_COMPLETED_REWARDS" or name == "CHALLENGE_MODE_RESET" then
+        Logger.Info(("Simulator: %s (%d/%d)"):format(name, index, total))
+        return
+    end
+    if index == 1 or index == total or index % 25 == 0 then
+        Logger.Debug(("Simulator: %s (%d/%d)"):format(name, index, total))
+    end
+end
+
+---@param ev table
+function Sim:_DispatchEvent(ev)
+    local dungeonMonitor = GetDungeonMonitor()
+    if not dungeonMonitor then
+        Logger.Error("Simulator: DungeonMonitor not available")
+        return
+    end
+
+    local name = EventName(ev)
+    local payload = EventPayload(ev)
+
+    local arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11, arg12, arg13, arg14, arg15, arg16 =
+        BuildDungeonArgs(name, payload)
+
+    if type(dungeonMonitor.SimulateEvent) == "function" then
+        dungeonMonitor:SimulateEvent(name, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11, arg12,
+            arg13, arg14, arg15, arg16)
+    elseif type(dungeonMonitor.EventHandler) == "function" then
+        dungeonMonitor:EventHandler(name, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11, arg12,
+            arg13, arg14, arg15, arg16)
+    end
+end
+
+---@param token number
+function Sim:_ScheduleNext(token)
+    local st = self._simState
+    if not st or st.token ~= token or type(st.events) ~= "table" then
+        return
+    end
+
+    local nextIdx = (tonumber(st.index) or 0) + 1
+    local ev = st.events[nextIdx]
+    if not ev then
+        Logger.Info("Simulator: complete")
+        self._simState = nil
+
+        if self._restoreRunLoggerEnabled then
+            self._restoreRunLoggerEnabled = nil
+            local rl = MythicPlusModule and MythicPlusModule.RunLogger
+            if rl and type(rl.Enable) == "function" then
+                rl:Enable()
+            end
+        end
+
+        return
+    end
+
+    local nextRel = EventRel(ev)
+    local speed = tonumber(st.speed) or 1
+    if speed <= 0 then speed = 1 end
+    local prevRel = tonumber(st.prevRel) or 0
+
+    local delay = (nextRel - prevRel) / speed
+    if delay < 0 then delay = 0 end
+
+    local function fire()
+        st = self._simState
+        if not st or st.token ~= token then
+            return
+        end
+
+        st.index = nextIdx
+        st.prevRel = nextRel
+
+        self:_LogStage(ev, st.index or 0, st.total or 0)
+        self:_DispatchEvent(ev)
+
+        self:_ScheduleNext(token)
+    end
+
+    if C_Timer and type(C_Timer.After) == "function" then
+        C_Timer.After(delay, fire)
+    else
+        fire()
+    end
+end
+
+---@param jsonText string
+---@param opts table|nil
+function Sim:StartSimulationFromJSON(jsonText, opts)
+    if self._simState then
+        self:StopSimulation()
+    end
+
+    local parsed, err = DecodeJSON(jsonText)
+    if not parsed then
+        Logger.Error("Simulator: JSON parse failed: " .. tostring(err))
+        return
+    end
+    if type(parsed) ~= "table" then
+        Logger.Error("Simulator: JSON root must be an object")
+        return
+    end
+    if parsed.format ~= "TwichUI_RunLog_v2" then
+        Logger.Warn("Simulator: unexpected format: " .. tostring(parsed.format))
+    end
+    if type(parsed.events) ~= "table" then
+        Logger.Error("Simulator: missing events array")
+        return
+    end
+
+    local events = {}
+    for _, ev in ipairs(parsed.events) do
+        if type(ev) == "table" then
+            events[#events + 1] = ev
+        end
+    end
+
+    table.sort(events, function(a, b)
+        local ar = EventRel(a)
+        local br = EventRel(b)
+        if ar == br then
+            return EventName(a) < EventName(b)
+        end
+        return ar < br
+    end)
+
+    local speed = opts and opts.speed or nil
+    if speed == nil then
+        speed = GetConfiguredSpeed()
+    end
+    speed = ClampNumber(speed, 0.1, 50, 10)
+
+    -- Ensure Mythic+ + DungeonMonitor are enabled so callbacks fire normally.
+    if MythicPlusModule and type(MythicPlusModule.IsEnabled) == "function" and type(MythicPlusModule.Enable) == "function" then
+        if not MythicPlusModule:IsEnabled() then
+            MythicPlusModule:Enable()
+        end
+    end
+    local dungeonMonitor = GetDungeonMonitor()
+    if dungeonMonitor and type(dungeonMonitor.Enable) == "function" and not dungeonMonitor.enabled then
+        dungeonMonitor:Enable()
+    end
+
+    -- Avoid overwriting run logs while simulating (restore after).
+    local rl = MythicPlusModule and MythicPlusModule.RunLogger
+    if rl and rl.enabled and type(rl.Disable) == "function" then
+        self._restoreRunLoggerEnabled = true
+        rl:Disable()
+    end
+
+    self._simToken = (self._simToken or 0) + 1
+    local token = self._simToken
+    self._simState = {
+        token = token,
+        events = events,
+        total = #events,
+        index = 0,
+        prevRel = 0,
+        speed = speed,
+        startedAt = type(GetTime) == "function" and GetTime() or 0,
+    }
+
+    Logger.Info(("Simulator: starting (%d events), speed x%.2f"):format(#events, speed))
+    self:_ScheduleNext(token)
+end
+
+-- ----------------------------
+-- Simple paste-to-run UI
+-- ----------------------------
+
+function Sim:_EnsureFrame()
+    if self._frame and self._editBox then
+        return
+    end
+
+    local frame = CreateFrame("Frame", "TwichUI_MythicPlus_SimulatorFrame", UIParent, "BackdropTemplate")
+    frame:SetSize(760, 520)
+    frame:SetPoint("CENTER")
+    frame:SetFrameStrata("DIALOG")
+    frame:Hide()
+
+    frame:SetMovable(true)
+    frame:SetClampedToScreen(true)
+
+    if frame.SetTemplate then
+        frame:SetTemplate("Transparent")
+    else
+        frame:SetBackdrop({
+            bgFile = "Interface/Tooltips/UI-Tooltip-Background",
+            edgeFile = "Interface/Tooltips/UI-Tooltip-Border",
+            tile = true,
+            tileSize = 16,
+            edgeSize = 16,
+            insets = { left = 4, right = 4, top = 4, bottom = 4 },
+        })
+        frame:SetBackdropColor(0, 0, 0, 0.9)
+    end
+
+    local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    title:SetPoint("TOPLEFT", 12, -10)
+    title:SetText("TwichUI Mythic+ Simulator")
+
+    -- Drag handle (so dragging doesn't fight the edit box selection)
+    local drag = CreateFrame("Frame", nil, frame)
+    drag:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
+    drag:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, 0)
+    drag:SetHeight(42)
+    drag:EnableMouse(true)
+    drag:RegisterForDrag("LeftButton")
+    drag:SetScript("OnDragStart", function()
+        if frame and frame.StartMoving then
+            frame:StartMoving()
+        end
+    end)
+    drag:SetScript("OnDragStop", function()
+        if frame and frame.StopMovingOrSizing then
+            frame:StopMovingOrSizing()
+        end
+    end)
+
+    local hint = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    hint:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -6)
+    hint:SetText("Paste a TwichUI_RunLog_v2 JSON export, then click Start")
+
+    local close = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
+    close:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -2, -2)
+
+    local startBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    startBtn:SetSize(120, 22)
+    startBtn:SetPoint("TOPLEFT", frame, "TOPLEFT", 12, -52)
+    startBtn:SetText("Start")
+
+    local stopBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    stopBtn:SetSize(120, 22)
+    stopBtn:SetPoint("LEFT", startBtn, "RIGHT", 8, 0)
+    stopBtn:SetText("Stop")
+
+    local speedLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    speedLabel:SetPoint("LEFT", stopBtn, "RIGHT", 12, 0)
+    speedLabel:SetText("Speed")
+
+    local speedBox = CreateFrame("EditBox", nil, frame, "InputBoxTemplate")
+    speedBox:SetSize(60, 20)
+    speedBox:SetPoint("LEFT", speedLabel, "RIGHT", 6, 0)
+    speedBox:SetAutoFocus(false)
+    speedBox:SetNumeric(false)
+    speedBox:SetText(tostring(GetConfiguredSpeed()))
+
+    local scroll = CreateFrame("ScrollFrame", "TwichUI_MythicPlus_SimulatorScrollFrame", frame,
+        "UIPanelScrollFrameTemplate")
+    scroll:SetPoint("TOPLEFT", frame, "TOPLEFT", 12, -84)
+    scroll:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -32, 12)
+
+    local editBox = CreateFrame("EditBox", nil, scroll)
+    editBox:SetMultiLine(true)
+    editBox:SetAutoFocus(false)
+    editBox:EnableMouse(true)
+    editBox:SetFontObject("ChatFontNormal")
+    editBox:SetWidth(700)
+    editBox:SetTextInsets(6, 6, 6, 6)
+    editBox:SetScript("OnEscapePressed", function() frame:Hide() end)
+    editBox:SetScript("OnTextChanged", function() scroll:UpdateScrollChildRect() end)
+    scroll:SetScrollChild(editBox)
+
+    frame:SetScript("OnShow", function()
+        if editBox and editBox.SetFocus then
+            editBox:SetFocus()
+            editBox:HighlightText()
+        end
+        speedBox:SetText(tostring(GetConfiguredSpeed()))
+    end)
+
+    startBtn:SetScript("OnClick", function()
+        local jsonText = editBox:GetText() or ""
+        local speed = ClampNumber(speedBox:GetText(), 0.1, 50, GetConfiguredSpeed())
+        Sim:StartSimulationFromJSON(jsonText, { speed = speed })
+    end)
+
+    stopBtn:SetScript("OnClick", function()
+        Sim:StopSimulation()
+    end)
+
+    -- ElvUI skinning (best-effort)
+    if Skins then
+        if Skins.HandleButton then
+            Skins:HandleButton(startBtn)
+            Skins:HandleButton(stopBtn)
+        end
+        if Skins.HandleCloseButton then
+            Skins:HandleCloseButton(close)
+        end
+        if Skins.HandleScrollBar then
+            local sb = scroll and (scroll.ScrollBar or (scroll.GetName and _G[scroll:GetName() .. "ScrollBar"]))
+            if sb then
+                Skins:HandleScrollBar(sb)
+            end
+        end
+        if Skins.HandleEditBox then
+            Skins:HandleEditBox(speedBox)
+            -- This template varies across ElvUI versions; ignore if it errors.
+            pcall(function() Skins:HandleEditBox(editBox) end)
+        end
+    end
+
+    self._frame = frame
+    self._editBox = editBox
+end
+
+function Sim:ToggleFrame()
+    self:_EnsureFrame()
+    if not self._frame then return end
+    if self._frame.IsShown and self._frame:IsShown() then
+        self._frame:Hide()
+    else
+        self._frame:Show()
+    end
+end
 
 function Sim:Enable()
     if self.enabled then return end
-    Logger.Debug("Mythic plus simulator enabled")
+    Module:Enable()
+    self.enabled = true
+    Logger.Debug("Mythic+ simulator enabled")
 end
 
 function Sim:Disable()
     if not self.enabled then return end
-    Logger.Debug("Mythic plus simulator disabled")
-end
-
---- Determines if the simulator can simulate the given function.
----@param funcName string the name of the function
----@return boolean canSimulate true if the simulator can simulate the function, false otherwise
-function Sim:CanSimulateFunc(funcName)
-    return Sim[funcName] ~= nil
-end
-
---[[ Simulated API functions go below this line ]]
-
----@class MythicPlusSimulator_SupportedEvent events supported by the simulator
-Sim.SupportedEvents = {
-    "CHALLENGE_MODE_START",
-    "CHALLENGE_MODE_COMPLETED_REWARDS"
-}
-
----@param event MythicPlusSimulator_SupportedEvent the event to simulate
-function Sim:SimEvent(event)
-    Logger.Debug("Request received to simulate event: " .. event)
-
-    if not self.EventSim:Delegate(event) then
-        Logger.Error("Simulator did not simulate event '" ..
-            event .. "'. Either the simulation was not implemented, or the event is not supported.")
-        return
+    self:StopSimulation()
+    Module:Disable()
+    self.enabled = false
+    if self._frame then
+        self._frame:Hide()
     end
+    Logger.Debug("Mythic+ simulator disabled")
 end
 
-function EventSim:Delegate(event)
-    if event and self["__" .. event] then
-        self["__" .. event](self)
-        return true
-    else
-        return false
-    end
-end
-
-function EventSim:__CHALLENGE_MODE_START()
-    local mapID = 525
-    local DungeonMonitor = MythicPlusModule.DungeonMonitor
-    if DungeonMonitor and DungeonMonitor.enabled then
-        Logger.Debug("Simulating CHALLENGE_MODE_START event with mapID " .. mapID)
-        DungeonMonitor:EventHandler("CHALLENGE_MODE_START", mapID)
-    end
-end
-
-function EventSim:__CHALLENGE_MODE_COMPLETED_REWARDS()
-    local mapID = 525
-    local medal = 3
-    local timeMS = 1500000
-    local money = 500000
-    ---@type ChallengeModeReward[]
-    local rewards = {
-        {
-            rewardID = 32837,    -- is this an item id?
-            quantity = 1,
-            displayInfoID = nil, -- not sure what this is
-            isCurrency = false,
-        },
-    }
-
-    local DungeonMonitor = MythicPlusModule.DungeonMonitor
-    if DungeonMonitor and DungeonMonitor.enabled then
-        Logger.Debug("Simulating CHALLENGE_MODE_COMPLETED_REWARDS event with mapID " .. mapID)
-        DungeonMonitor:EventHandler("CHALLENGE_MODE_COMPLETED_REWARDS", mapID, medal, timeMS, money, rewards)
-    end
+function Sim:Initialize()
+    if self.enabled then return end
+    self:Enable()
 end

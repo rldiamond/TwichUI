@@ -8,6 +8,7 @@
             "class": "ROGUE",
             "guid": "Player-121-0AF13993",
             "name": "Twich",
+            "realm": "AzjolNerub",
             "role": "NONE",
             "spec": "Assassination",
             "specId": 259,
@@ -17,25 +18,50 @@
         "reason": "start"
       },
       "relSeconds": 0,
-      "timestamp": 1767113938
+      "timestamp": 1767114252
     },
     {
       "name": "CHALLENGE_MODE_START",
       "payload": { "mapId": 525 },
       "relSeconds": 0,
-      "timestamp": 1767113938
+      "timestamp": 1767114252
     },
     {
       "name": "CHAT_MSG_LOOT",
       "payload": {
         "guid": "Player-121-0AF13993",
         "itemLinks": ["[Inert Dust]"],
-        "lineId": 78,
+        "itemNameText": "Inert Dust",
+        "items": [
+          {
+            "info": {
+              "bindType": "0",
+              "classID": "15",
+              "equipLoc": "INVTYPE_NON_EQUIP_IGNORE",
+              "expansionID": "10",
+              "iLevel": "80",
+              "icon": "133849",
+              "isCraftingReagent": "false",
+              "link": "[Inert Dust]",
+              "maxStack": "200",
+              "minLevel": "1",
+              "name": "Inert Dust",
+              "quality": "0",
+              "sellPrice": "6507",
+              "subClassID": "0",
+              "subType": "Junk",
+              "type": "Miscellaneous"
+            },
+            "itemId": 220253,
+            "link": "[Inert Dust]"
+          }
+        ],
+        "lineId": 79,
         "message": "You receive loot: [Inert Dust]",
         "player": "Twich-AzjolNerub"
       },
-      "relSeconds": 10.661999999998,
-      "timestamp": 1767113948
+      "relSeconds": 14.237999999999,
+      "timestamp": 1767114266
     },
     {
       "name": "CHALLENGE_MODE_COMPLETED_REWARDS",
@@ -46,8 +72,8 @@
         "rewards": [{ "isCurrency": false, "quantity": 1, "rewardID": 32837 }],
         "timeMS": 1500000
       },
-      "relSeconds": 15.929999999998,
-      "timestamp": 1767113954
+      "relSeconds": 21.923999999999,
+      "timestamp": 1767114274
     }
   ],
   "format": "TwichUI_RunLog_v2",
@@ -66,12 +92,13 @@
       "rewards": [{ "isCurrency": false, "quantity": 1, "rewardID": 32837 }],
       "timeMS": 1500000
     },
-    "endUnix": 1767113954,
+    "endUnix": 1767114274,
     "group": [
       {
         "class": "ROGUE",
         "guid": "Player-121-0AF13993",
         "name": "Twich",
+        "realm": "AzjolNerub",
         "role": "NONE",
         "spec": "Assassination",
         "specId": 259,
@@ -83,22 +110,24 @@
         "class": "ROGUE",
         "guid": "Player-121-0AF13993",
         "name": "Twich",
+        "realm": "AzjolNerub",
         "role": "NONE",
         "spec": "Assassination",
         "specId": 259,
         "unit": "player"
       }
     ],
-    "id": "1767113938-525",
+    "id": "1767114252-525",
     "mapId": 525,
     "player": {
       "class": "ROGUE",
       "guid": "Player-121-0AF13993",
       "name": "Twich",
+      "realm": "AzjolNerub",
       "spec": "Assassination",
       "specId": 259
     },
-    "startUnix": 1767113938,
+    "startUnix": 1767114252,
     "status": "completed"
   }
 }

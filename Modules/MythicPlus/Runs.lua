@@ -5,6 +5,7 @@ local CM = T:GetModule("Configuration")
 local _G = _G
 local ElvUI = _G.ElvUI
 local E = ElvUI and ElvUI[1]
+local Skins = E and E.GetModule and E:GetModule("Skins", true)
 
 --- @class MythicPlusRunsSubmodule
 local Runs = MythicPlusModule.Runs or {}
@@ -171,6 +172,20 @@ local function CreateRunsPanel(parent)
     local scrollFrame = CreateFrame("ScrollFrame", nil, panel, "UIPanelScrollFrameTemplate")
     scrollFrame:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, -5)
     scrollFrame:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -26, PANEL_PADDING)
+
+    -- ElvUI scrollbar skinning (best-effort)
+    if Skins and Skins.HandleScrollBar then
+        local sb = scrollFrame.ScrollBar
+        if not sb and scrollFrame.GetName then
+            local name = scrollFrame:GetName()
+            if name then
+                sb = _G[name .. "ScrollBar"]
+            end
+        end
+        if sb then
+            Skins:HandleScrollBar(sb)
+        end
+    end
 
     local content = CreateFrame("Frame", nil, scrollFrame)
     content:SetSize(1, 1) -- Initial size, will be updated

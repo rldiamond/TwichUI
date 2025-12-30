@@ -19,6 +19,11 @@ local unpackFn = _G.unpack or unpack
 -- LSM is backed by ElvUI's media library when available
 local LSM = T.Libs and T.Libs.LSM
 
+-- Optional ElvUI integration for scrollbars
+local ElvUI = rawget(_G, "ElvUI")
+local E = ElvUI and ElvUI[1]
+local Skins = E and E.GetModule and E:GetModule("Skins", true)
+
 ---@class MythicPlusDungeonsSubmodule
 ---@field initialized boolean|nil
 ---@field Refresh fun(self:MythicPlusDungeonsSubmodule)|nil
@@ -1811,6 +1816,20 @@ local function CreateDungeonsPanel(parent)
     local scrollFrame = CreateFrame("ScrollFrame", nil, runsContainer, "UIPanelScrollFrameTemplate")
     scrollFrame:SetPoint("TOPLEFT", runsContainer, "TOPLEFT", 10, -20)
     scrollFrame:SetPoint("BOTTOMRIGHT", runsContainer, "BOTTOMRIGHT", -26, 10)
+
+    -- ElvUI scrollbar skinning (best-effort)
+    if Skins and Skins.HandleScrollBar then
+        local sb = scrollFrame.ScrollBar
+        if not sb and scrollFrame.GetName then
+            local name = scrollFrame:GetName()
+            if name then
+                sb = _G[name .. "ScrollBar"]
+            end
+        end
+        if sb then
+            Skins:HandleScrollBar(sb)
+        end
+    end
 
     local content = CreateFrame("Frame", nil, scrollFrame)
     content:SetSize(1, 1)

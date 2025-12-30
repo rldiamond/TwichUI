@@ -26,11 +26,21 @@ function DT:Create(order)
         return T:GetModule("MythicPlus")
     end
 
+    local function GetSimulatorSupportedEvents()
+        local ok, mp = pcall(function() return GetModule() end)
+        if not ok or not mp or not mp.Simulator or type(mp.Simulator.SupportedEvents) ~= "table" then
+            return { "CHALLENGE_MODE_START" }
+        end
+        if #mp.Simulator.SupportedEvents == 0 then
+            return { "CHALLENGE_MODE_START" }
+        end
+        return mp.Simulator.SupportedEvents
+    end
+
     ---@type ConfigEntry
     local mythicPlusDefaultEvent = {
         key = "developer.testing.mythicPlus.simulateEvent.event",
-        default = GetModule()
-            .Simulator.SupportedEvents[1]
+        default = (GetSimulatorSupportedEvents()[1] or "CHALLENGE_MODE_START")
     }
     return {
         type = "group",
@@ -211,7 +221,11 @@ function DT:Create(order)
                                     ---@type MythicPlusModule
                                     local MythicPlus = T:GetModule("MythicPlus")
                                     local events = {}
-                                    for _, eventName in ipairs(MythicPlus.Simulator.SupportedEvents) do
+                                    local list = (MythicPlus and MythicPlus.Simulator and MythicPlus.Simulator.SupportedEvents)
+                                    if type(list) ~= "table" then
+                                        list = { "CHALLENGE_MODE_START" }
+                                    end
+                                    for _, eventName in ipairs(list) do
                                         events[eventName] = eventName
                                     end
                                     return events
@@ -242,11 +256,59 @@ function DT:Create(order)
                                         return
                                     end
 
+                                    if type(MythicPlus.Simulator.SimEvent) ~= "function" then
+                                        Logger.Error("MythicPlus simulator does not support SimEvent().")
+                                        return
+                                    end
+
                                     MythicPlus.Simulator:SimEvent(eventName)
                                 end
                             }
                         }
-                    }
+                    },
+                    recordingSimulator = {
+                        type = "group",
+                        inline = true,
+                        name = "Simulate a Recording",
+                        order = 4,
+                        args = {
+                            simulatorSpeed = {
+                                type = "range",
+                                name = "Simulator Playback Speed",
+                                desc = "Speed multiplier for replaying exported run logs (higher = faster).",
+                                order = 1.5,
+                                min = 0.1,
+                                max = 50,
+                                step = 0.1,
+                                bigStep = 1,
+                                get = function()
+                                    return CM:GetProfileSettingSafe("developer.mythicplus.simulator.playbackSpeed", 10)
+                                end,
+                                set = function(_, value)
+                                    CM:SetProfileSettingSafe("developer.mythicplus.simulator.playbackSpeed", value)
+                                end,
+                            },
+                            openSimulator = {
+                                type = "execute",
+                                name = "Open Simulator",
+                                desc = "Paste an exported JSON run log to replay it through the Mythic+ event pipeline.",
+                                order = 1.6,
+                                func = function()
+                                    local ok, mythicPlus = pcall(function() return T:GetModule("MythicPlus") end)
+                                    if not ok or not mythicPlus or not mythicPlus.Simulator then
+                                        return
+                                    end
+                                    if type(mythicPlus.Simulator.Initialize) == "function" then
+                                        mythicPlus.Simulator:Initialize()
+                                    end
+                                    if type(mythicPlus.Simulator.ToggleFrame) == "function" then
+                                        mythicPlus.Simulator:ToggleFrame()
+                                    end
+                                end,
+                            },
+
+                        }
+                    },
                 },
             },
 

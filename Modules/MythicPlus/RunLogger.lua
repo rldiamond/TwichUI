@@ -9,6 +9,7 @@ local _G = _G
 local CreateFrame = _G.CreateFrame
 local UIParent = _G.UIParent
 local GetTime = _G.GetTime
+local C_Timer = _G.C_Timer
 local time = _G.time
 local date = _G.date
 local UnitGUID = _G.UnitGUID
@@ -31,6 +32,11 @@ local GetItemInfoInstant = C_Item and C_Item.GetItemInfoInstant
 local strmatch = _G.string and _G.string.match
 local strgmatch = _G.string and _G.string.gmatch
 
+-- Optional ElvUI integration for skinned close button / scroll bars.
+---@diagnostic disable-next-line: undefined-field
+local E = _G.ElvUI and _G.ElvUI[1]
+local Skins = E and E.GetModule and E:GetModule("Skins", true)
+
 ---@type MythicPlusModule
 local MythicPlusModule = T:GetModule("MythicPlus")
 ---@class MythicPlusRunLoggerSubmodule
@@ -52,6 +58,8 @@ local CM = T:GetModule("Configuration")
 local DungeonMonitor = MythicPlusModule.DungeonMonitor
 ---@type MythicPlusAPISubmodule
 local API = MythicPlusModule.API
+---@type MythicPlusScoreCalculatorSubmodule
+local ScoreCalculator = MythicPlusModule.ScoreCalculator
 
 ---@type table<string, ConfigEntry>
 local CONFIGURATION = {
@@ -575,7 +583,7 @@ function MythicPlusRunLogger:_EnsureFrame()
     local close = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
     close:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -2, -2)
 
-    local scroll = CreateFrame("ScrollFrame", nil, frame, "UIPanelScrollFrameTemplate")
+    local scroll = CreateFrame("ScrollFrame", "TwichUI_RunLogger_CopyScrollFrame", frame, "UIPanelScrollFrameTemplate")
     scroll:SetPoint("TOPLEFT", frame, "TOPLEFT", 12, -52)
     scroll:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -32, 12)
 
@@ -592,6 +600,31 @@ function MythicPlusRunLogger:_EnsureFrame()
     end)
 
     scroll:SetScrollChild(editBox)
+
+    -- ElvUI skinning (best-effort)
+    if Skins then
+        if Skins.HandleCloseButton then
+            Skins:HandleCloseButton(close)
+        end
+
+        if Skins.HandleScrollBar then
+            local sb = scroll.ScrollBar
+            if not sb and scroll.GetName then
+                local name = scroll:GetName()
+                if name then
+                    sb = _G[name .. "ScrollBar"]
+                end
+            end
+            if sb then
+                Skins:HandleScrollBar(sb)
+            end
+        end
+
+        if Skins.HandleEditBox then
+            -- This template varies across ElvUI versions; ignore if it errors.
+            pcall(function() Skins:HandleEditBox(editBox) end)
+        end
+    end
 
     frame:SetScript("OnShow", function()
         if editBox and editBox.SetFocus then
@@ -748,21 +781,65 @@ function MythicPlusRunLogger:_OnDungeonEvent(eventName, ...)
 
     if eventName == "CHALLENGE_MODE_COMPLETED_REWARDS" then
         local mapId, medal, timeMS, money, rewards = ...
-        self:_AppendEvent(eventName, {
-            mapId = tonumber(mapId) or mapId,
-            medal = medal,
-            timeMS = timeMS,
-            money = money,
-            rewards = rewards,
-        })
 
-        self:_FinalizeRun("completed", {
-            mapId = tonumber(mapId) or mapId,
+        local mapIdNum = tonumber(mapId) or mapId
+        local timeSec = (tonumber(timeMS) or 0) / 1000
+
+        local db = GetDB()
+        local run = db and db.active or nil
+        local runId = run and run.id or nil
+        local level = run and tonumber(run.level) or nil
+
+        local calculatedScore, calcDetails
+        if ScoreCalculator and type(ScoreCalculator.CalculateForRun) == "function" and level then
+            calculatedScore, calcDetails = ScoreCalculator.CalculateForRun(mapIdNum, level, timeSec)
+        end
+
+        local blizzardRunScore, blizzardMatch
+        if ScoreCalculator and type(ScoreCalculator.TryGetBlizzardRunScore) == "function" then
+            blizzardRunScore, blizzardMatch = ScoreCalculator.TryGetBlizzardRunScore(mapIdNum, level, timeSec)
+        end
+
+        local payload = {
+            mapId = mapIdNum,
             medal = medal,
             timeMS = timeMS,
+            timeSec = timeSec,
             money = money,
             rewards = rewards,
-        })
+            keystoneLevel = level,
+            calculatedRunScore = calculatedScore,
+            calculatedScoreDetails = calcDetails,
+            blizzardRunScore = blizzardRunScore,
+            blizzardRunScoreMatch = blizzardMatch,
+        }
+
+        self:_AppendEvent(eventName, payload)
+        self:_FinalizeRun("completed", payload)
+
+        -- Best-effort retry: run history data (and thus runScore) may not be available immediately.
+        if (not blizzardRunScore) and C_Timer and type(C_Timer.After) == "function" and runId then
+            C_Timer.After(1.0, function()
+                local db2 = GetDB()
+                local last = db2 and db2.lastCompleted or nil
+                if not last or last.id ~= runId or type(last.completion) ~= "table" then
+                    return
+                end
+                if last.completion.blizzardRunScore ~= nil then
+                    return
+                end
+
+                local score2, match2
+                if ScoreCalculator and type(ScoreCalculator.TryGetBlizzardRunScore) == "function" then
+                    score2, match2 = ScoreCalculator.TryGetBlizzardRunScore(mapIdNum, level, timeSec)
+                end
+                if score2 ~= nil then
+                    last.completion.blizzardRunScore = score2
+                    last.completion.blizzardRunScoreMatch = match2
+                    last.completion.blizzardRunScoreSource = "delayed_run_history"
+                end
+            end)
+        end
         return
     end
 

@@ -17,12 +17,131 @@ local T = unpack(Twich)
 local MythicPlusModule = T:GetModule("MythicPlus")
 ---@class MythicPlusScoreCalculatorSubmodule
 local ScoreCalculator = MythicPlusModule.ScoreCalculator or {}
+MythicPlusModule.ScoreCalculator = ScoreCalculator
 
 ---@type LoggerModule
 local Logger = T:GetModule("Logger")
 ---@type MythicPlusDataSubmodule
 local Data = MythicPlusModule.Data
 
+local _G = _G
+local C_ChallengeMode = _G.C_ChallengeMode
+local C_MythicPlus = _G.C_MythicPlus
+local unpackFn = _G.unpack or unpack
+
+local function RoundTo(x, decimals)
+    x = tonumber(x)
+    if not x then return 0 end
+    decimals = tonumber(decimals) or 0
+    local p = 10 ^ decimals
+    return math.floor(x * p + 0.5) / p
+end
+
+---@param mapId number|nil
+---@return number|nil parTimeSeconds
+function ScoreCalculator.GetParTimeSeconds(mapId)
+    mapId = tonumber(mapId)
+    if not mapId or mapId <= 0 or not C_ChallengeMode then
+        return nil
+    end
+
+    if type(C_ChallengeMode.GetMapUIInfo) == "function" then
+        local ok, name, id, timeLimit = pcall(C_ChallengeMode.GetMapUIInfo, mapId)
+        if ok then
+            local tl = tonumber(timeLimit)
+            if tl and tl > 0 then
+                return tl
+            end
+        end
+    end
+
+    if type(C_ChallengeMode.GetMapInfo) == "function" then
+        local ok, info = pcall(C_ChallengeMode.GetMapInfo, mapId)
+        if ok and type(info) == "table" then
+            local tl = tonumber(info.timeLimitSeconds or info.timeLimit)
+            if tl and tl > 0 then
+                return tl
+            end
+        end
+    end
+
+    return nil
+end
+
+---@param mapId number|nil
+---@param level number|nil
+---@param durationSec number|nil
+---@return number|nil runScore
+---@return table|nil matchedRun
+function ScoreCalculator.TryGetBlizzardRunScore(mapId, level, durationSec)
+    mapId = tonumber(mapId)
+    level = tonumber(level)
+    durationSec = tonumber(durationSec)
+
+    if not mapId or mapId <= 0 or not C_MythicPlus or type(C_MythicPlus.GetRunHistory) ~= "function" then
+        return nil, nil
+    end
+
+    local history
+    do
+        local ok, h = pcall(C_MythicPlus.GetRunHistory)
+        if ok and type(h) == "table" then
+            history = h
+        else
+            local tries = {
+                { true,  true },
+                { true,  false },
+                { false, false },
+            }
+            for _, args in ipairs(tries) do
+                ok, h = pcall(C_MythicPlus.GetRunHistory, unpackFn(args))
+                if ok and type(h) == "table" then
+                    history = h
+                    break
+                end
+            end
+        end
+    end
+
+    if type(history) ~= "table" then
+        return nil, nil
+    end
+
+    local bestRun
+    local bestScore
+    local bestDiff
+
+    for _, run in ipairs(history) do
+        if type(run) == "table" then
+            local runMapId = tonumber(run.mapChallengeModeID) or tonumber(run.mapChallengeModeId)
+                or tonumber(run.challengeModeID) or tonumber(run.challengeModeId)
+                or tonumber(run.mapID) or tonumber(run.mapId)
+            local runLevel = tonumber(run.level) or tonumber(run.keystoneLevel) or tonumber(run.mythicLevel)
+
+            if runMapId == mapId and (not level or not runLevel or runLevel == level) then
+                local score = tonumber(run.mapScore) or tonumber(run.runScore) or tonumber(run.score)
+                    or tonumber(run.mythicRating)
+                if score then
+                    local diff = 0
+                    if durationSec then
+                        local runDur = tonumber(run.durationSec) or tonumber(run.duration) or tonumber(run.time)
+                        if runDur then
+                            diff = math.abs(runDur - durationSec)
+                        end
+                    end
+
+                    if not bestDiff or diff < bestDiff then
+                        bestDiff = diff
+                        bestScore = score
+                        bestRun = run
+                    end
+                end
+            end
+        end
+    end
+
+    return bestScore, bestRun
+end
 
 --- Calculate the Mythic+ score for a completed keystone run.
 --
@@ -32,7 +151,7 @@ local Data = MythicPlusModule.Data
 -- - `parTime` (number|nil): The par time in seconds used to compute time bonuses. If `nil` or <= 0, time bonuses are skipped.
 --
 -- Returns:
--- - (integer) The total Mythic+ score for the run (base + affix bonuses + time bonus).
+-- - (number) The total Mythic+ score for the run (base + affix bonuses + time bonus).
 --
 -- Notes:
 -- - Uses configuration values from `Data.MythicPlusScoreConfig` and affix counts from `Data.GetAffixCountForKeystoneLevel`.
@@ -40,8 +159,16 @@ local Data = MythicPlusModule.Data
 ---@param keystoneLevel integer
 ---@param completedInTime number|nil
 ---@param parTime number|nil
----@return integer
+---@return number
 function ScoreCalculator.Calculate(keystoneLevel, completedInTime, parTime)
+    keystoneLevel = tonumber(keystoneLevel) or 0
+    completedInTime = tonumber(completedInTime)
+    parTime = tonumber(parTime)
+
+    if keystoneLevel < 2 then
+        return 0
+    end
+
     -- determine score of keystone based on level alone
     local baseScore = Data.MythicPlusScoreConfig.BASE_SCORE +
         ((keystoneLevel - 2) * Data.MythicPlusScoreConfig.SCORE_PER_LEVEL)
@@ -59,11 +186,52 @@ function ScoreCalculator.Calculate(keystoneLevel, completedInTime, parTime)
         if timeRatio < 0.6 then
             timeBonus = Data.MythicPlusScoreConfig.TIME_BONUS_MAX
         elseif timeRatio < 1.0 then
-            timeBonus = math.floor((1.0 - timeRatio) / Data.MythicPlusScoreConfig.TIME_BONUS_THRESHOLD *
-                Data.MythicPlusScoreConfig.TIME_BONUS_MAX)
+            -- Linear from 0%..40% faster => 0..max (e.g. 20% faster = 7.5)
+            timeBonus = ((1.0 - timeRatio) / Data.MythicPlusScoreConfig.TIME_BONUS_THRESHOLD) *
+                Data.MythicPlusScoreConfig.TIME_BONUS_MAX
         end
     end
 
     local totalScore = baseScore + timeBonus
-    return totalScore
+    return RoundTo(totalScore, 1)
+end
+
+---@param mapId number|nil
+---@param keystoneLevel integer
+---@param completedInTime number|nil seconds
+---@return number score
+---@return table details
+function ScoreCalculator.CalculateForRun(mapId, keystoneLevel, completedInTime)
+    local parTime = ScoreCalculator.GetParTimeSeconds(mapId)
+    local score = ScoreCalculator.Calculate(keystoneLevel, completedInTime, parTime)
+
+    local baseScore = Data.MythicPlusScoreConfig.BASE_SCORE +
+        ((tonumber(keystoneLevel) - 2) * Data.MythicPlusScoreConfig.SCORE_PER_LEVEL)
+    local affixCount = Data.GetAffixCountForKeystoneLevel(keystoneLevel)
+    local affixBonus = (affixCount and (affixCount * Data.MythicPlusScoreConfig.AFFIX_BONUS_SCORE)) or 0
+
+    local timeBonus = 0
+    local timeRatio
+    if completedInTime and parTime and parTime > 0 then
+        timeRatio = completedInTime / parTime
+        if timeRatio < 0.6 then
+            timeBonus = Data.MythicPlusScoreConfig.TIME_BONUS_MAX
+        elseif timeRatio < 1.0 then
+            timeBonus = ((1.0 - timeRatio) / Data.MythicPlusScoreConfig.TIME_BONUS_THRESHOLD) *
+                Data.MythicPlusScoreConfig.TIME_BONUS_MAX
+        end
+    end
+
+    return score, {
+        mapId = tonumber(mapId),
+        level = tonumber(keystoneLevel),
+        timeSec = tonumber(completedInTime),
+        parTimeSec = tonumber(parTime),
+        timeRatio = RoundTo(timeRatio, 4),
+        baseScore = RoundTo(baseScore, 1),
+        affixCount = affixCount,
+        affixBonus = RoundTo(affixBonus, 1),
+        timeBonus = RoundTo(timeBonus, 1),
+        total = score,
+    }
 end
