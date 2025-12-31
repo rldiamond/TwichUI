@@ -371,7 +371,8 @@ function MainWindow:_CreateHeaderIfNeeded()
 
     local text = header:CreateFontString(nil, "OVERLAY")
     text:SetPoint("LEFT", header, "LEFT", 0, 0)
-    text:SetJustifyH("LEFT")
+    text:SetPoint("RIGHT", header, "RIGHT", 0, 0)
+    text:SetJustifyH("CENTER")
     if text.SetFontObject then
         text:SetFontObject(_G.GameFontHighlight)
     end
@@ -432,9 +433,11 @@ function MainWindow:_CreateHeaderIfNeeded()
         text:ClearAllPoints()
         text:SetPoint("LEFT", header, "LEFT", 0, 0)
         text:SetPoint("RIGHT", self.headerAffixButtons[1], "LEFT", -10, 0)
-        text:SetJustifyH("LEFT")
+        text:SetJustifyH("CENTER")
     else
-        text:SetPoint("RIGHT", header, "RIGHT", 0, 0)
+        text:ClearAllPoints()
+        text:SetAllPoints(header)
+        text:SetJustifyH("CENTER")
     end
 end
 

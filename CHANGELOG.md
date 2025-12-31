@@ -9,6 +9,8 @@
 
 - Dramatically improved the Best in Slot frame by making it more intuitive to select items
 - Detached the item selection frame from the Mythic+ frame and allowed it to be draggable
+- Added a failsafe mechanism if the Mythic+ recorder fails to close a dungeon session at the end of a dungeon
+- Moved Keystone information to the center of the frame's title area
 
 ### Version 0.02-ALPHA [ December 31 2025 ]
 
