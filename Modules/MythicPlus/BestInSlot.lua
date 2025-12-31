@@ -35,10 +35,10 @@ local SLOTS = {
     { name = "Waist",    slotID = 6,  texture = "Interface\\PaperDoll\\UI-PaperDoll-Slot-Waist" },
     { name = "Legs",     slotID = 7,  texture = "Interface\\PaperDoll\\UI-PaperDoll-Slot-Legs" },
     { name = "Feet",     slotID = 8,  texture = "Interface\\PaperDoll\\UI-PaperDoll-Slot-Feet" },
-    { name = "Finger1",  slotID = 11, texture = "Interface\\PaperDoll\\UI-PaperDoll-Slot-Finger" },
-    { name = "Finger2",  slotID = 12, texture = "Interface\\PaperDoll\\UI-PaperDoll-Slot-Finger" },
-    { name = "Trinket1", slotID = 13, texture = "Interface\\PaperDoll\\UI-PaperDoll-Slot-Trinket" },
-    { name = "Trinket2", slotID = 14, texture = "Interface\\PaperDoll\\UI-PaperDoll-Slot-Trinket" },
+    { name = "First Ring",  slotID = 11, texture = "Interface\\PaperDoll\\UI-PaperDoll-Slot-Finger" },
+    { name = "Second Ring",  slotID = 12, texture = "Interface\\PaperDoll\\UI-PaperDoll-Slot-Finger" },
+    { name = "First Trinket", slotID = 13, texture = "Interface\\PaperDoll\\UI-PaperDoll-Slot-Trinket" },
+    { name = "Second Trinket", slotID = 14, texture = "Interface\\PaperDoll\\UI-PaperDoll-Slot-Trinket" },
     { name = "MainHand", slotID = 16, texture = "Interface\\PaperDoll\\UI-PaperDoll-Slot-MainHand" },
     { name = "OffHand",  slotID = 17, texture = "Interface\\PaperDoll\\UI-PaperDoll-Slot-SecondaryHand" },
 }
@@ -691,7 +691,7 @@ local function CreateChooserFrame(parent)
     f.sourceButtons = {}
     f.itemButtons = {}
 
-    f:SetSize(700, 500)
+    f:SetSize(750, 500)
     f:SetPoint("CENTER")
     f:SetFrameStrata("FULLSCREEN_DIALOG")
     f:SetFrameLevel(100)
@@ -756,9 +756,9 @@ local function CreateChooserFrame(parent)
         end
     end)
 
-    f.Title = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    f.Title = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
     f.Title:SetPoint("TOP", 0, -15)
-    f.Title:SetText("Add Item")
+    f.Title:SetText("Select Item")
 
     local close = CreateFrame("Button", nil, f, "UIPanelCloseButton")
     close:SetPoint("TOPRIGHT", -5, -5)
@@ -943,39 +943,58 @@ local function CreateChooserFrame(parent)
     local customForm = CreateFrame("Frame", nil, rightCol)
     customForm:SetPoint("TOPLEFT", 0, 0)
     customForm:SetPoint("TOPRIGHT", 0, 0)
-    customForm:SetHeight(200)
+    customForm:SetHeight(300)
     customForm:Hide()
     f.CustomForm = customForm
 
+    -- Description
+    local customDesc = customForm:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    customDesc:SetPoint("TOPLEFT", 10, -10)
+    customDesc:SetPoint("TOPRIGHT", -10, -10)
+    customDesc:SetJustifyH("LEFT")
+    customDesc:SetText("The Best in Slot module tracks items from the current Mythic+ season.\n\nIf you want to track an item from a different source (e.g. World Boss, PvP, Crafting, or Legacy Content), you can add it manually here.")
+    customDesc:SetTextColor(0.7, 0.7, 0.7)
+
+    -- Input Label
     local customItemLabel = customForm:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    customItemLabel:SetPoint("TOPLEFT", 10, -10)
+    customItemLabel:SetPoint("TOPLEFT", customDesc, "BOTTOMLEFT", 0, -20)
     customItemLabel:SetText("Item Name, ID, or Link:")
 
+    -- Input Box
     local customItemInput = CreateFrame("EditBox", nil, customForm, "InputBoxTemplate")
-    customItemInput:SetSize(350, 20)
-    customItemInput:SetPoint("TOPLEFT", customItemLabel, "BOTTOMLEFT", 0, -10)
+    customItemInput:SetSize(350, 25)
+    customItemInput:SetPoint("TOPLEFT", customItemLabel, "BOTTOMLEFT", 0, -8)
     customItemInput:SetAutoFocus(false)
+    customItemInput:SetTextInsets(5, 5, 0, 0)
     if E then E:GetModule("Skins"):HandleEditBox(customItemInput) end
     f.CustomItemInput = customItemInput
 
     -- Tip
     local customItemTip = customForm:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    customItemTip:SetPoint("TOPLEFT", customItemInput, "BOTTOMLEFT", 0, -5)
-    customItemTip:SetText("Press Enter to Search")
+    customItemTip:SetPoint("LEFT", customItemInput, "RIGHT", 10, 0)
+    customItemTip:SetText("(Press Enter to Search)")
     customItemTip:SetTextColor(0.5, 0.5, 0.5)
 
     -- Result Preview
     local customItemResultBtn = CreateFrame("Button", nil, customForm)
-    customItemResultBtn:SetPoint("TOPLEFT", customItemTip, "BOTTOMLEFT", 0, -5)
-    customItemResultBtn:SetSize(350, 20)
+    customItemResultBtn:SetPoint("TOPLEFT", customItemInput, "BOTTOMLEFT", 0, -15)
+    customItemResultBtn:SetSize(350, 30)
+
+    -- Result Icon
+    local customItemResultIcon = customItemResultBtn:CreateTexture(nil, "ARTWORK")
+    customItemResultIcon:SetSize(24, 24)
+    customItemResultIcon:SetPoint("LEFT", 0, 0)
+    customItemResultIcon:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
+    f.CustomItemResultIcon = customItemResultIcon
 
     local customItemResult = customItemResultBtn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    customItemResult:SetPoint("LEFT", 0, 0)
+    customItemResult:SetPoint("LEFT", customItemResultIcon, "RIGHT", 10, 0)
     customItemResult:SetText("")
     f.CustomItemResult = customItemResult
 
     customItemResultBtn:SetScript("OnEnter", function(self)
-        if f.selectedItemLink then
+        local text = f.CustomItemResult:GetText()
+        if f.selectedItemLink and text and text ~= "" and text ~= "Item not found" and text ~= "Searching..." then
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
             GameTooltip:SetHyperlink(f.selectedItemLink)
             GameTooltip:Show()
@@ -983,7 +1002,8 @@ local function CreateChooserFrame(parent)
     end)
     customItemResultBtn:SetScript("OnLeave", function(self) GameTooltip:Hide() end)
     customItemResultBtn:SetScript("OnClick", function()
-        if f.selectedItemLink then
+        local text = f.CustomItemResult:GetText()
+        if f.selectedItemLink and text and text ~= "" and text ~= "Item not found" and text ~= "Searching..." then
             ChatEdit_InsertLink(f.selectedItemLink)
         end
     end)
@@ -994,12 +1014,19 @@ local function CreateChooserFrame(parent)
         if not text or text == "" then return end
 
         f.CustomItemResult:SetText("Searching...")
+        f.CustomItemResultIcon:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
+        f.selectedItemLink = nil -- Clear previous selection
 
         local function SetItem(link)
             f.selectedItemLink = link
             f.CustomItemResult:SetText(link)
             f.Preview:SetText(link)
             f.AddBtn:Enable()
+            
+            local icon = GetItemIcon(link)
+            if icon then
+                f.CustomItemResultIcon:SetTexture(icon)
+            end
         end
 
         local name, link = GetItemInfo(text)
@@ -1016,6 +1043,7 @@ local function CreateChooserFrame(parent)
                     else
                         f.CustomItemResult:SetText("Item not found")
                         f.AddBtn:Disable()
+                        f.selectedItemLink = nil
                     end
                 end)
             else
@@ -1030,11 +1058,13 @@ local function CreateChooserFrame(parent)
                         else
                             f.CustomItemResult:SetText("Item not found")
                             f.AddBtn:Disable()
+                            f.selectedItemLink = nil
                         end
                     end)
                 else
                     f.CustomItemResult:SetText("Item not found")
                     f.AddBtn:Disable()
+                    f.selectedItemLink = nil
                 end
             end
         end
@@ -1045,7 +1075,7 @@ local function CreateChooserFrame(parent)
     customSourceLabel:SetText("Source:")
 
     local customSourceDropdown = CreateFrame("Frame", "TwichUI_BiS_CustomSourceDropdown", f, "UIDropDownMenuTemplate")
-    customSourceDropdown:SetPoint("TOPLEFT", customSourceLabel, "BOTTOMLEFT", -15, -10)
+    customSourceDropdown:SetPoint("TOPLEFT", customSourceLabel, "BOTTOMLEFT", -15, -5)
     customSourceDropdown:SetFrameLevel(f:GetFrameLevel() + 100) -- Boost frame level significantly
     UIDropDownMenu_SetWidth(customSourceDropdown, 200)
     UIDropDownMenu_SetText(customSourceDropdown, "Select Source")
@@ -1503,11 +1533,16 @@ local function CreateChooserFrame(parent)
         -- print("TwichUI Debug: Displaying", #items, "items after filtering.")
 
         -- Render items
+        local width = rightScroll:GetWidth()
+        if width < 100 then width = 450 end -- Fallback
+        rightContent:SetWidth(width)
+
         local yOffset = 0
         for _, item in ipairs(items) do
             local btn = CreateFrame("Button", nil, rightContent)
-            btn:SetSize(400, 30)
+            btn:SetHeight(30)
             btn:SetPoint("TOPLEFT", 0, -yOffset)
+            btn:SetPoint("RIGHT", 0, 0)
 
             local icon = btn:CreateTexture(nil, "ARTWORK")
             icon:SetSize(24, 24)
