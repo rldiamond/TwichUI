@@ -5,6 +5,7 @@
     <Script
         file="Keystone.lua" />
     <Script file="Dungeons.lua" />
+    <Script file="BestInSlot.lua" />
     <Script file="Runs.lua" />
     <Script
         file="Summary.lua" />

@@ -55,7 +55,8 @@
     "BANK",
     "Professions",
     "NUM_BAG_SLOTS",
-    "UIParentLoadAddOn"
+    "UIParentLoadAddOn",
+    "SOURCES"
 ],
   "Lua.type.weakUnionCheck": true,
   "Lua.diagnostics.disable": ["assign-type-mismatch"],

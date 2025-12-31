@@ -26,10 +26,10 @@ local Logger = T:GetModule("Logger")
 
 --- @class MythicPlusConfiguration
 MythicPlusModule.CONFIGURATION = {
-    ENABLED = { key = "mythicplus.enabled", default = false, },
+    ENABLED = { key = "mythicplus.enabled", default = true, },
 
     -- Main window
-    MAIN_WINDOW_ENABLED = { key = "mythicplus.mainWindow.enabled", default = false, },
+    MAIN_WINDOW_ENABLED = { key = "mythicplus.mainWindow.enabled", default = true, },
     MAIN_WINDOW_LOCKED = { key = "mythicplus.mainWindow.locked", default = false, },
     MAIN_WINDOW_WIDTH = { key = "mythicplus.mainWindow.width", default = 420, },
     MAIN_WINDOW_HEIGHT = { key = "mythicplus.mainWindow.height", default = 320, },
@@ -64,6 +64,10 @@ function MythicPlusModule:Enable()
     if Module:IsEnabled() then return end
     Module:Enable()
 
+    if self.MainWindow and self.MainWindow.Initialize then
+        self.MainWindow:Initialize()
+    end
+
     if self.Dungeons and self.Dungeons.Initialize then
         self.Dungeons:Initialize()
     end
@@ -72,12 +76,12 @@ function MythicPlusModule:Enable()
         self.Runs:Initialize()
     end
 
-    if self.Summary and self.Summary.Initialize then
-        self.Summary:Initialize()
+    if self.BestInSlot and self.BestInSlot.Initialize then
+        self.BestInSlot:Initialize()
     end
 
-    if self.MainWindow and self.MainWindow.Initialize then
-        self.MainWindow:Initialize()
+    if self.Summary and self.Summary.Initialize then
+        self.Summary:Initialize()
     end
 
     if self.DungeonMonitor and self.DungeonMonitor.Enable then

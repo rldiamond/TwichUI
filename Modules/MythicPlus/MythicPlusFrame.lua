@@ -213,6 +213,12 @@ function MainWindow:RegisterPanel(id, factory, onShow, onHide, opts)
         if type(opts.order) == "number" then
             panel.order = opts.order
         end
+        if type(opts.icon) == "string" then
+            panel.icon = opts.icon
+        end
+        if type(opts.iconCoords) == "table" then
+            panel.iconCoords = opts.iconCoords
+        end
     end
     panel.factory = factory
     panel.onShow = onShow
@@ -711,7 +717,9 @@ function MainWindow:RefreshNav()
         if panel then
             local btn = self.navButtons[id]
             local height = NAV_BUTTON_HEIGHT
-            if id == "dungeons" or id == "runs" or id == "summary" then
+            local hasIcon = (id == "dungeons" or id == "runs" or id == "summary" or panel.icon)
+
+            if hasIcon then
                 height = 60
             end
 
@@ -764,21 +772,32 @@ function MainWindow:RefreshNav()
                 btn.__twichuiText:SetText(panel.label or id)
             end
 
-            if id == "dungeons" or id == "runs" or id == "summary" then
+            if hasIcon then
                 if not btn.NavIcon then
                     btn.NavIcon = btn:CreateTexture(nil, "ARTWORK")
                 end
 
-                if id == "dungeons" then
+                if panel.icon then
+                    btn.NavIcon:SetSize(24, 24)
+                    btn.NavIcon:SetTexture(panel.icon)
+                    if panel.iconCoords then
+                        btn.NavIcon:SetTexCoord(unpack(panel.iconCoords))
+                    else
+                        btn.NavIcon:SetTexCoord(0, 1, 0, 1)
+                    end
+                elseif id == "dungeons" then
                     btn.NavIcon:SetSize(24, 28)
                     btn.NavIcon:SetTexture("Interface\\AddOns\\TwichUI\\Media\\Textures\\dungeons.tga")
+                    btn.NavIcon:SetTexCoord(0, 1, 0, 1)
                 elseif id == "runs" then
                     btn.NavIcon:SetSize(24, 28)
                     btn.NavIcon:SetTexture("Interface\\AddOns\\TwichUI\\Media\\Textures\\runs.tga")
+                    btn.NavIcon:SetTexCoord(0, 1, 0, 1)
                 else
                     -- Summary (64x92 original)
                     btn.NavIcon:SetSize(22, 32)
                     btn.NavIcon:SetTexture("Interface\\AddOns\\TwichUI\\Media\\Textures\\summary.tga")
+                    btn.NavIcon:SetTexCoord(0, 1, 0, 1)
                 end
 
                 btn.NavIcon:ClearAllPoints()
