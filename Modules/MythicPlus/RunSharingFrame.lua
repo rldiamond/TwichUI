@@ -31,6 +31,19 @@ local Skins = E and E.GetModule and E:GetModule("Skins", true)
 local ROW_HEIGHT = 20
 local MAX_ROWS = 15
 
+StaticPopupDialogs["TWICHUI_CONFIRM_DELETE_RUN"] = {
+    text = "Are you sure you want to delete this run?",
+    button1 = "Yes",
+    button2 = "No",
+    OnAccept = function()
+        RunSharingFrame:PerformDelete()
+    end,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    preferredIndex = 3,
+}
+
 -- JSON Helpers (Copied from RunLogger to ensure availability)
 local function IsArrayTable(t)
     if type(t) ~= "table" then return false end
@@ -236,7 +249,7 @@ function RunSharingFrame:Toggle()
         self.frame:Hide()
     else
         self:UpdateList()
-        self:UpdateSpeedSlider()
+        self:UpdateSpeedInput()
         self.frame:Show()
     end
 end
@@ -321,6 +334,8 @@ function RunSharingFrame:CreateFrame()
     detailsScroll:SetPoint("TOPLEFT", sep, "TOPRIGHT", 5, 0)
     detailsScroll:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -30, 80) -- Raised bottom to make room for slider
     if Skins and detailsScroll.ScrollBar then Skins:HandleScrollBar(detailsScroll.ScrollBar) end
+    detailsScroll:Hide()                                                 -- Hidden by default
+    self.detailsScroll = detailsScroll
 
     local detailsEditBox = CreateFrame("EditBox", nil, detailsScroll)
     detailsEditBox:SetMultiLine(true)
@@ -333,66 +348,121 @@ function RunSharingFrame:CreateFrame()
     detailsScroll:SetScrollChild(detailsEditBox)
     self.detailsEditBox = detailsEditBox
 
-    -- Speed Slider
-    local speedSlider = CreateFrame("Slider", "TwichUI_RunSharing_SpeedSlider", frame, "OptionsSliderTemplate")
-    speedSlider:SetPoint("BOTTOM", frame, "BOTTOM", 0, 50)
-    speedSlider:SetMinMaxValues(0.5, 50)
-    speedSlider:SetValue(10)
-    speedSlider:SetWidth(200)
-    speedSlider:SetOrientation("HORIZONTAL")
+    -- Formatted Details View
+    local detailsFrame = CreateFrame("Frame", nil, frame)
+    detailsFrame:SetPoint("TOPLEFT", sep, "TOPRIGHT", 5, 0)
+    detailsFrame:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -10, 80)
+    self.detailsFrame = detailsFrame
 
-    _G[speedSlider:GetName() .. 'Low']:SetText('0.5x')
-    _G[speedSlider:GetName() .. 'High']:SetText('50x')
-    _G[speedSlider:GetName() .. 'Text']:SetText('Sim Speed: 10x')
+    -- Header Info
+    local headerText = detailsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    headerText:SetPoint("TOPLEFT", 0, 0)
+    headerText:SetJustifyH("LEFT")
+    self.headerText = headerText
 
-    speedSlider:SetScript("OnValueChanged", function(self, value)
-        local val = math.floor(value * 10) / 10
-        _G[self:GetName() .. 'Text']:SetText('Sim Speed: ' .. val .. 'x')
-        CM:SetProfileSettingSafe("developer.mythicplus.simulator.playbackSpeed", val)
-    end)
+    -- Events List
+    local eventsScroll = CreateFrame("ScrollFrame", "TwichUI_RunSharing_EventsScroll", detailsFrame,
+        "UIPanelScrollFrameTemplate")
+    eventsScroll:SetPoint("TOPLEFT", headerText, "BOTTOMLEFT", 0, -10)
+    eventsScroll:SetPoint("BOTTOMRIGHT", detailsFrame, "BOTTOMRIGHT", -25, 0)
+    if Skins and eventsScroll.ScrollBar then Skins:HandleScrollBar(eventsScroll.ScrollBar) end
+    self.eventsScroll = eventsScroll
 
-    if Skins then Skins:HandleSliderFrame(speedSlider) end
-    self.speedSlider = speedSlider
+    local eventsContent = CreateFrame("Frame", nil, eventsScroll)
+    eventsContent:SetSize(450, 1)
+    eventsScroll:SetScrollChild(eventsContent)
+    self.eventsContent = eventsContent
+    self.eventRows = {}
+
+    -- View Toggle Button
+    local viewToggleBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    viewToggleBtn:SetSize(80, 20)
+    viewToggleBtn:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -30, -12)
+    viewToggleBtn:SetText("Raw JSON")
+    viewToggleBtn:SetScript("OnClick", function() self:ToggleViewMode() end)
+    if Skins then Skins:HandleButton(viewToggleBtn) end
+    self.viewToggleBtn = viewToggleBtn
+
+    self.viewMode = "formatted" -- "formatted" or "json"
 
     -- Buttons
     local btnWidth = 100
     local btnHeight = 24
+    local iconSize = 32
 
-    -- Simulate Button
-    local simBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    simBtn:SetSize(btnWidth, btnHeight)
+    -- Simulate Button (Icon)
+    local simBtn = CreateFrame("Button", nil, frame)
+    simBtn:SetSize(iconSize, iconSize)
     simBtn:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -12, 12)
-    simBtn:SetText("Simulate")
+    simBtn:SetNormalTexture("Interface\\AddOns\\TwichUI\\Media\\Textures\\play-button.tga")
+    simBtn:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight", "ADD")
     simBtn:SetScript("OnClick", function() self:OnSimulateClick() end)
-    if Skins then Skins:HandleButton(simBtn) end
+    simBtn:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText("Start Simulation")
+        GameTooltip:Show()
+    end)
+    simBtn:SetScript("OnLeave", function(self) GameTooltip:Hide() end)
     self.simBtn = simBtn
 
-    -- Stop Button
-    local stopBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    stopBtn:SetSize(btnWidth, btnHeight)
-    stopBtn:SetPoint("RIGHT", simBtn, "LEFT", -10, 0)
-    stopBtn:SetText("Stop")
+    -- Stop Button (Icon)
+    local stopBtn = CreateFrame("Button", nil, frame)
+    stopBtn:SetSize(iconSize, iconSize)
+    stopBtn:SetPoint("RIGHT", simBtn, "LEFT", -5, 0)
+    stopBtn:SetNormalTexture("Interface\\AddOns\\TwichUI\\Media\\Textures\\stop-button.tga")
+    stopBtn:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight", "ADD")
     stopBtn:SetScript("OnClick", function() self:OnStopClick() end)
-    if Skins then Skins:HandleButton(stopBtn) end
+    stopBtn:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText("Stop Simulation")
+        GameTooltip:Show()
+    end)
+    stopBtn:SetScript("OnLeave", function(self) GameTooltip:Hide() end)
     self.stopBtn = stopBtn
 
-    -- Stop Button
-    local stopBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    stopBtn:SetSize(btnWidth, btnHeight)
-    stopBtn:SetPoint("RIGHT", simBtn, "LEFT", -10, 0)
-    stopBtn:SetText("Stop")
-    stopBtn:SetScript("OnClick", function() self:OnStopClick() end)
-    if Skins then Skins:HandleButton(stopBtn) end
-    self.stopBtn = stopBtn
+    -- Speed Input
+    local speedInput = CreateFrame("EditBox", "TwichUI_RunSharing_SpeedInput", frame, "InputBoxTemplate")
+    speedInput:SetSize(40, 20)
+    speedInput:SetPoint("RIGHT", stopBtn, "LEFT", -10, 0)
+    speedInput:SetAutoFocus(false)
+    speedInput:SetJustifyH("CENTER")
+    speedInput:SetScript("OnEnterPressed", function(self)
+        local val = tonumber(self:GetText())
+        if val and val > 0 then
+            CM:SetProfileSettingSafe("developer.mythicplus.simulator.playbackSpeed", val)
+            self:ClearFocus()
+        else
+            self:SetText(CM:GetProfileSettingSafe("developer.mythicplus.simulator.playbackSpeed", 10))
+        end
+    end)
+    speedInput:SetScript("OnEscapePressed", function(self)
+        self:SetText(CM:GetProfileSettingSafe("developer.mythicplus.simulator.playbackSpeed", 10))
+        self:ClearFocus()
+    end)
+    if Skins then Skins:HandleEditBox(speedInput) end
+    self.speedInput = speedInput
+
+    local speedLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    speedLabel:SetPoint("RIGHT", speedInput, "LEFT", -5, 0)
+    speedLabel:SetText("Speed:")
 
     -- Delete Button
     local delBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
     delBtn:SetSize(btnWidth, btnHeight)
-    delBtn:SetPoint("RIGHT", stopBtn, "LEFT", -10, 0)
+    delBtn:SetPoint("RIGHT", speedLabel, "LEFT", -20, 0)
     delBtn:SetText("Delete")
     delBtn:SetScript("OnClick", function() self:OnDeleteClick() end)
     if Skins then Skins:HandleButton(delBtn) end
     self.delBtn = delBtn
+
+    -- Rename Button
+    local renameBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    renameBtn:SetSize(btnWidth, btnHeight)
+    renameBtn:SetPoint("RIGHT", delBtn, "LEFT", -10, 0)
+    renameBtn:SetText("Rename")
+    renameBtn:SetScript("OnClick", function() self:OnRenameClick() end)
+    if Skins then Skins:HandleButton(renameBtn) end
+    self.renameBtn = renameBtn
 
     -- Clear All Button
     local clearBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
@@ -415,11 +485,70 @@ function RunSharingFrame:CreateFrame()
     self.rows = {}
 end
 
-function RunSharingFrame:UpdateSpeedSlider()
-    if not self.speedSlider then return end
+function RunSharingFrame:UpdateSpeedInput()
+    if not self.speedInput then return end
     local speed = CM:GetProfileSettingSafe("developer.mythicplus.simulator.playbackSpeed", 10)
-    self.speedSlider:SetValue(speed)
-    _G[self.speedSlider:GetName() .. 'Text']:SetText('Sim Speed: ' .. speed .. 'x')
+    self.speedInput:SetText(tostring(speed))
+end
+
+function RunSharingFrame:ResolveDungeonName(run)
+    if not run or not run.data then return end
+
+    -- Debug: Check what we are working with
+    -- print("TwichUI Debug: Checking run...", run.data.dungeonName)
+
+    -- Check if we need to resolve
+    local needsResolution = false
+    if not run.data.dungeonName or run.data.dungeonName == "Unknown" or run.data.dungeonName == "Unknown Dungeon" then
+        needsResolution = true
+    end
+
+    if not needsResolution then return end
+
+    local mapId = run.data.run and run.data.run.mapId
+
+    if not mapId and run.data.events then
+        for _, ev in ipairs(run.data.events) do
+            if ev.name == "CHALLENGE_MODE_START" and ev.payload and ev.payload.mapId then
+                mapId = ev.payload.mapId
+                -- print("TwichUI Debug: Found mapId in events:", mapId)
+                break
+            end
+        end
+    end
+
+    if mapId then
+        local name = C_ChallengeMode.GetMapUIInfo(mapId)
+
+        -- Fallback to C_ChallengeMode.GetMapInfo (returns table)
+        if not name and C_ChallengeMode.GetMapInfo then
+            local info = C_ChallengeMode.GetMapInfo(mapId)
+            if info and info.name then
+                name = info.name
+            end
+        end
+
+        -- Fallback to C_Map if ChallengeMode API fails
+        if not name then
+            local mapInfo = C_Map.GetMapInfo(mapId)
+            if mapInfo then
+                name = mapInfo.name
+            end
+        end
+
+        if name then
+            run.data.dungeonName = name
+            -- Also update the run object mapId if missing, for consistency
+            if run.data.run then
+                run.data.run.mapId = mapId
+            end
+            print(string.format("TwichUI: Resolved dungeon name for run to '%s' (MapID: %s)", name, tostring(mapId)))
+        else
+            print("TwichUI Debug: All API lookups (GetMapUIInfo, GetMapInfo, C_Map) returned nil for mapId:", mapId)
+        end
+    else
+        print("TwichUI Debug: Could not find mapId for run")
+    end
 end
 
 function RunSharingFrame:UpdateList()
@@ -433,6 +562,8 @@ function RunSharingFrame:UpdateList()
 
     local yOffset = 0
     for i, run in ipairs(runs) do
+        self:ResolveDungeonName(run)
+
         local row = self.rows[i]
         if not row then
             row = CreateFrame("Button", nil, self.listContent)
@@ -456,7 +587,11 @@ function RunSharingFrame:UpdateList()
         local dungeon = run.data and run.data.dungeonName or "Unknown"
         local level = run.data and run.data.keystoneLevel or "?"
 
-        row.text:SetText(string.format("%s: +%s %s (%s)", dateStr, level, dungeon, sender))
+        if run.customName then
+            row.text:SetText(run.customName)
+        else
+            row.text:SetText(string.format("%s: +%s %s (%s)", dateStr, level, dungeon, sender))
+        end
 
         yOffset = yOffset + ROW_HEIGHT
     end
@@ -466,15 +601,354 @@ end
 
 function RunSharingFrame:SelectRun(index)
     self.selectedIndex = index
-    local db = self:GetDB()
-    local run = db.remoteRuns[index]
+    self:UpdateDetailsView()
+end
 
-    if run and run.data then
+function RunSharingFrame:ToggleViewMode()
+    if self.viewMode == "formatted" then
+        self.viewMode = "json"
+        self.viewToggleBtn:SetText("Formatted")
+    else
+        self.viewMode = "formatted"
+        self.viewToggleBtn:SetText("Raw JSON")
+    end
+    self:UpdateDetailsView()
+end
+
+function RunSharingFrame:UpdateDetailsView()
+    local db = self:GetDB()
+    local run = self.selectedIndex and db.remoteRuns[self.selectedIndex]
+
+    if not run or not run.data then
+        self.detailsEditBox:SetText("")
+        self.detailsScroll:Hide()
+        self.detailsFrame:Hide()
+        self.headerText:SetText("")
+        return
+    end
+
+    if self.viewMode == "json" then
+        self.detailsFrame:Hide()
+        self.detailsScroll:Show()
         local json = EncodeJSON(run.data)
         self.detailsEditBox:SetText(json)
     else
-        self.detailsEditBox:SetText("")
+        self.detailsScroll:Hide()
+        self.detailsFrame:Show()
+
+        -- Header
+        local d = run.data.run or {}
+        local dungeon = run.data.dungeonName or (d.dungeonName) -- Check both locations
+        if not dungeon or dungeon == "Unknown" then
+            dungeon = d.mapId and C_ChallengeMode.GetMapUIInfo(d.mapId) or "Unknown Dungeon"
+        end
+
+        local level = d.level or "?"
+        local dateStr = date("%Y-%m-%d %H:%M", run.receivedAt)
+        self.headerText:SetFontObject("GameFontNormalHuge")
+        self.headerText:SetText(string.format("%s +%s\n|cffaaaaaa%s|r", dungeon, level, dateStr))
+
+        -- Events List
+        self:UpdateEventsList(run.data.events)
     end
+end
+
+function RunSharingFrame:UpdateEventsList(events)
+    if not events then return end
+
+    -- Clear rows
+    for _, row in ipairs(self.eventRows) do row:Hide() end
+
+    local yOffset = 0
+    local ROW_HEIGHT = 28 -- Increased from 24
+
+    local FRIENDLY_NAMES = {
+        CHALLENGE_MODE_START = "Key Start",
+        CHALLENGE_MODE_COMPLETED = "Key Completed",
+        CHALLENGE_MODE_RESET = "Key Reset",
+        ENCOUNTER_START = "Boss Start",
+        ENCOUNTER_END = "Boss End",
+        CHAT_MSG_LOOT = "Loot",
+        PLAYER_DEAD = "Player Death",
+        GROUP_ROSTER_UPDATE = "Roster Update",
+        GROUP_ROSTER_SNAPSHOT = "Roster Snapshot",
+    }
+
+    local EVENT_COLORS = {
+        CHALLENGE_MODE_START = "|cff4caf50",     -- Green
+        CHALLENGE_MODE_COMPLETED = "|cff4caf50", -- Green
+        CHALLENGE_MODE_RESET = "|cfff44336",     -- Red
+        ENCOUNTER_START = "|cffffc107",          -- Amber
+        ENCOUNTER_END = "|cffffc107",            -- Amber
+        CHAT_MSG_LOOT = "|cff9c27b0",            -- Purple
+        PLAYER_DEAD = "|cfff44336",              -- Red
+        GROUP_ROSTER_UPDATE = "|cff9e9e9e",      -- Grey
+        GROUP_ROSTER_SNAPSHOT = "|cff9e9e9e",    -- Grey
+    }
+
+    self.expandedRows = self.expandedRows or {}
+
+    for i, ev in ipairs(events) do
+        local row = self.eventRows[i]
+        if not row then
+            row = CreateFrame("Button", nil, self.eventsContent)
+            row:SetSize(450, ROW_HEIGHT)
+
+            -- Background (Striping)
+            local bg = row:CreateTexture(nil, "BACKGROUND")
+            bg:SetAllPoints()
+            bg:SetColorTexture(1, 1, 1, 0.05)
+            bg:Hide()
+            row.bg = bg
+
+            -- Expand Button (Skinnable)
+            local expandBtn = CreateFrame("Button", nil, row)
+            expandBtn:SetSize(16, 16)
+            expandBtn:SetPoint("TOPLEFT", 5, -(ROW_HEIGHT - 16) / 2)
+
+            if Skins then
+                Skins:HandleButton(expandBtn)
+                expandBtn.text = expandBtn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+                expandBtn.text:SetPoint("CENTER")
+            else
+                -- Fallback for non-ElvUI
+                expandBtn:SetNormalTexture("Interface\\Buttons\\UI-PlusButton-Up")
+            end
+
+            expandBtn:SetScript("OnClick", function() self:ToggleEventDetails(i) end)
+            row.expandBtn = expandBtn
+
+            local timeText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+            timeText:SetPoint("TOPLEFT", expandBtn, "TOPRIGHT", 8, -2)
+            timeText:SetWidth(45)
+            timeText:SetJustifyH("LEFT")
+            row.timeText = timeText
+
+            local nameText = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+            nameText:SetPoint("TOPLEFT", timeText, "TOPRIGHT", 5, 0)
+            nameText:SetWidth(300)
+            nameText:SetJustifyH("LEFT")
+            row.nameText = nameText
+
+            local playBtn = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+            playBtn:SetSize(40, 20)
+            playBtn:SetPoint("TOPRIGHT", -5, -(ROW_HEIGHT - 20) / 2)
+            playBtn:SetText("Play")
+            if Skins then Skins:HandleButton(playBtn) end
+            row.playBtn = playBtn
+
+            row:SetScript("OnClick", function() self:ToggleEventDetails(i) end)
+
+            row:SetScript("OnEnter", function(self)
+                GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+                if self.eventData then
+                    GameTooltip:AddLine(self.eventData.name or "Event", 1, 1, 1)
+                    if self.eventData.payload then
+                        local json = EncodeJSON(self.eventData.payload)
+                        if #json > 300 then json = json:sub(1, 297) .. "..." end
+                        GameTooltip:AddLine(json, 0.8, 0.8, 0.8, true)
+                    end
+                    GameTooltip:Show()
+                end
+            end)
+            row:SetScript("OnLeave", function(self) GameTooltip:Hide() end)
+
+            self.eventRows[i] = row
+        end
+
+        row:SetPoint("TOPLEFT", 0, -yOffset)
+        row:Show()
+        row.eventData = ev
+
+        -- Striping
+        if i % 2 == 0 then
+            row.bg:Show()
+        else
+            row.bg:Hide()
+        end
+
+        local rel = ev.relSeconds or 0
+        local m = math.floor(rel / 60)
+        local s = math.floor(rel % 60)
+        row.timeText:SetText(string.format("%02d:%02d", m, s))
+
+        local rawName = ev.name or "Unknown"
+        local friendly = FRIENDLY_NAMES[rawName]
+        local color = EVENT_COLORS[rawName] or "|cffffffff"
+
+        if friendly then
+            row.nameText:SetText(string.format("%s%s|r |cff888888(%s)|r", color, friendly, rawName))
+        else
+            row.nameText:SetText(color .. rawName .. "|r")
+        end
+
+        -- Expansion Logic
+        local isExpanded = self.expandedRows[i]
+
+        if Skins then
+            row.expandBtn.text:SetText(isExpanded and "-" or "+")
+        else
+            row.expandBtn:SetNormalTexture(isExpanded and "Interface\\Buttons\\UI-MinusButton-Up" or
+                "Interface\\Buttons\\UI-PlusButton-Up")
+        end
+
+        local rowHeight = ROW_HEIGHT
+
+        if isExpanded then
+            if not row.details then
+                row.details = CreateFrame("Frame", nil, row)
+                row.details:SetPoint("TOPLEFT", row, "TOPLEFT", 20, -ROW_HEIGHT)
+                row.details:SetPoint("RIGHT", row, "RIGHT", -10, 0)
+                row.details:EnableMouse(true)
+                row.details:SetScript("OnMouseDown", function() end)
+            end
+            row.details:Show()
+            local detailsHeight = self:PopulateEventDetails(row.details, ev.payload)
+            row.details:SetHeight(detailsHeight)
+            rowHeight = rowHeight + detailsHeight
+        else
+            if row.details then row.details:Hide() end
+        end
+
+        row:SetHeight(rowHeight)
+
+        row.playBtn:SetScript("OnClick", function()
+            if Simulator and Simulator.SimulateSingleEvent then
+                Simulator:SimulateSingleEvent(ev)
+            end
+        end)
+
+        yOffset = yOffset + rowHeight
+    end
+
+    self.eventsContent:SetHeight(math.max(1, yOffset))
+end
+
+function RunSharingFrame:ToggleEventDetails(index)
+    self.expandedRows = self.expandedRows or {}
+    self.expandedRows[index] = not self.expandedRows[index]
+
+    local db = self:GetDB()
+    local run = self.selectedIndex and db.remoteRuns[self.selectedIndex]
+    if run and run.data then
+        self:UpdateEventsList(run.data.events)
+    end
+end
+
+function RunSharingFrame:PopulateEventDetails(container, payload)
+    -- Hide single big editbox if it exists
+    if container.editBox then container.editBox:Hide() end
+    if container.measureFS then container.measureFS:Hide() end
+
+    container.rows = container.rows or {}
+    -- Hide all existing rows
+    for _, row in ipairs(container.rows) do row:Hide() end
+
+    local y = 5
+    local rowIndex = 0
+
+    local function GetRow()
+        rowIndex = rowIndex + 1
+        local row = container.rows[rowIndex]
+        if not row then
+            row = CreateFrame("Frame", nil, container)
+
+            row.key = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+            row.key:SetPoint("TOPLEFT", 0, 0)
+            row.key:SetJustifyH("LEFT")
+
+            row.value = CreateFrame("EditBox", nil, row)
+            row.value:SetFontObject("GameFontHighlight")
+            row.value:SetMultiLine(true)
+            row.value:SetAutoFocus(false)
+            row.value:SetJustifyH("LEFT")
+            row.value:SetPoint("TOPLEFT", row.key, "TOPRIGHT", 5, 0)
+            row.value:SetPoint("RIGHT", 0, 0)
+            row.value:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+            row.value:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
+            row.value:SetScript("OnTextChanged", function(self, userInput)
+                if userInput then
+                    self:SetText(self.originalText or "")
+                    self:ClearFocus()
+                end
+            end)
+
+            -- Measurement helper
+            row.measure = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+            row.measure:SetWordWrap(true)
+            row.measure:Hide()
+
+            container.rows[rowIndex] = row
+        end
+        row:Show()
+        row.value:Show()
+        return row
+    end
+
+    local function AddEntry(key, value, indentLevel)
+        local row = GetRow()
+        local indent = indentLevel * 12 -- Increased indentation
+
+        row:SetPoint("TOPLEFT", 10 + indent, -y)
+        row:SetPoint("RIGHT", -10, 0)
+
+        -- Set Key
+        row.key:SetText(string.format("|cffffd100%s:|r", key))
+
+        if type(value) == "table" then
+            row.value:Hide()
+            local rowHeight = row.key:GetStringHeight()
+            row:SetHeight(rowHeight)
+            y = y + rowHeight + 4 -- Increased spacing
+
+            local keys = {}
+            for k in pairs(value) do table.insert(keys, k) end
+            table.sort(keys, function(a, b)
+                if type(a) == "number" and type(b) == "number" then return a < b end
+                if type(a) == "number" then return true end
+                if type(b) == "number" then return false end
+                return tostring(a) < tostring(b)
+            end)
+
+            for _, k in ipairs(keys) do
+                AddEntry(k, value[k], indentLevel + 1)
+            end
+        else
+            local valStr = tostring(value)
+            row.value.originalText = valStr
+            row.value:SetText(valStr)
+
+            -- Calculate dimensions
+            local keyWidth = row.key:GetStringWidth()
+            local totalWidth = 450 - 20                         -- Approx container width
+            local availableWidth = totalWidth - indent - keyWidth - 5
+            if availableWidth < 50 then availableWidth = 50 end -- Min width
+
+            row.measure:SetWidth(availableWidth)
+            row.measure:SetText(valStr)
+            local valHeight = row.measure:GetStringHeight()
+            local keyHeight = row.key:GetStringHeight()
+
+            local rowHeight = math.max(keyHeight, valHeight)
+            row:SetHeight(rowHeight)
+            row.value:SetHeight(rowHeight + 10) -- Extra height to prevent scrolling
+
+            y = y + rowHeight + 4               -- Increased spacing
+        end
+    end
+
+    if type(payload) == "table" then
+        local keys = {}
+        for k in pairs(payload) do table.insert(keys, k) end
+        table.sort(keys)
+        for _, k in ipairs(keys) do
+            AddEntry(k, payload[k], 0)
+        end
+    else
+        AddEntry("Payload", payload, 0)
+    end
+
+    return y + 5
 end
 
 function RunSharingFrame:OnSimulateClick()
@@ -500,6 +974,11 @@ function RunSharingFrame:OnStopClick()
 end
 
 function RunSharingFrame:OnDeleteClick()
+    if not self.selectedIndex then return end
+    StaticPopup_Show("TWICHUI_CONFIRM_DELETE_RUN")
+end
+
+function RunSharingFrame:PerformDelete()
     if not self.selectedIndex then return end
     local db = self:GetDB()
     tremove(db.remoteRuns, self.selectedIndex)
@@ -608,4 +1087,93 @@ function RunSharingFrame:ShowImportDialog()
     if Skins then Skins:HandleButton(cancelBtn) end
 
     self.importFrame = frame
+end
+
+function RunSharingFrame:OnRenameClick()
+    if not self.selectedIndex then return end
+    self:ShowRenameDialog()
+end
+
+function RunSharingFrame:ShowRenameDialog()
+    if self.renameFrame then
+        self.renameFrame:Show()
+        return
+    end
+
+    local frame = CreateFrame("Frame", "TwichUI_RunSharing_RenameFrame", self.frame, "BackdropTemplate")
+    frame:SetSize(300, 120)
+    frame:SetPoint("CENTER")
+    frame:SetFrameStrata("DIALOG")
+    frame:SetFrameLevel(self.frame:GetFrameLevel() + 20)
+
+    if Skins then
+        Skins:HandleFrame(frame, true, nil, -5, 0, -5, 0)
+    else
+        if frame.SetTemplate then
+            frame:SetTemplate("Transparent")
+        else
+            frame:SetBackdrop({
+                bgFile = "Interface/Tooltips/UI-Tooltip-Background",
+                edgeFile = "Interface/Tooltips/UI-Tooltip-Border",
+                tile = true,
+                tileSize = 16,
+                edgeSize = 16,
+                insets = { left = 4, right = 4, top = 4, bottom = 4 },
+            })
+            frame:SetBackdropColor(0, 0, 0, 0.9)
+        end
+    end
+
+    local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    title:SetPoint("TOP", 0, -10)
+    title:SetText("Rename Run")
+
+    local editBox = CreateFrame("EditBox", nil, frame, "InputBoxTemplate")
+    editBox:SetSize(250, 20)
+    editBox:SetPoint("TOP", title, "BOTTOM", 0, -15)
+    editBox:SetAutoFocus(true)
+    if Skins then Skins:HandleEditBox(editBox) end
+    self.renameEditBox = editBox
+
+    local saveBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    saveBtn:SetSize(80, 24)
+    saveBtn:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -12, 12)
+    saveBtn:SetText("Save")
+    saveBtn:SetScript("OnClick", function()
+        local text = editBox:GetText()
+        local db = self:GetDB()
+        if self.selectedIndex and db.remoteRuns[self.selectedIndex] then
+            db.remoteRuns[self.selectedIndex].customName = (text ~= "" and text) or nil
+            self:UpdateList()
+        end
+        frame:Hide()
+    end)
+    if Skins then Skins:HandleButton(saveBtn) end
+
+    local cancelBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    cancelBtn:SetSize(80, 24)
+    cancelBtn:SetPoint("RIGHT", saveBtn, "LEFT", -10, 0)
+    cancelBtn:SetText("Cancel")
+    cancelBtn:SetScript("OnClick", function() frame:Hide() end)
+    if Skins then Skins:HandleButton(cancelBtn) end
+
+    self.renameFrame = frame
+
+    frame:SetScript("OnShow", function()
+        local db = self:GetDB()
+        if self.selectedIndex and db.remoteRuns[self.selectedIndex] then
+            local run = db.remoteRuns[self.selectedIndex]
+            if run.customName then
+                editBox:SetText(run.customName)
+            else
+                local dateStr = date("%m/%d %H:%M", run.receivedAt)
+                local sender = run.sender or "Unknown"
+                local dungeon = run.data and run.data.dungeonName or "Unknown"
+                local level = run.data and run.data.keystoneLevel or "?"
+                editBox:SetText(string.format("%s: +%s %s (%s)", dateStr, level, dungeon, sender))
+            end
+            editBox:HighlightText()
+            editBox:SetFocus()
+        end
+    end)
 end

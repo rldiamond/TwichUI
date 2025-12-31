@@ -79,6 +79,41 @@ end
 ---@param ... any
 function DungeonMonitor:EventHandler(event, ...)
     if not self.enabled then return end
+
+    -- Intercept CHALLENGE_MODE_START to resolve dungeon info immediately
+    if event == "CHALLENGE_MODE_START" then
+        local mapID = ...
+        -- If mapID is not provided in the event (it usually is), try to get it
+        if not mapID then
+            mapID = C_ChallengeMode.GetActiveChallengeMapID()
+        end
+
+        if mapID then
+            local name = C_ChallengeMode.GetMapUIInfo(mapID)
+
+            -- Fallback to C_ChallengeMode.GetMapInfo
+            if not name and C_ChallengeMode.GetMapInfo then
+                local info = C_ChallengeMode.GetMapInfo(mapID)
+                if info and info.name then
+                    name = info.name
+                end
+            end
+
+            -- Fallback to C_Map
+            if not name then
+                local mapInfo = C_Map.GetMapInfo(mapID)
+                if mapInfo then
+                    name = mapInfo.name
+                end
+            end
+
+            if name then
+                Logger.Debug(string.format("DungeonMonitor: Resolved dungeon '%s' (ID: %s)", name, tostring(mapID)))
+                InvokeCallbacks("TWICH_DUNGEON_START", mapID, name)
+            end
+        end
+    end
+
     Logger.Debug("Dungeon monitor delegating received event: " .. tostring(event))
     InvokeCallbacks(event, ...)
 end

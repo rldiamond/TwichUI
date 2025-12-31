@@ -87,7 +87,7 @@ function RunSharing:SendPing()
         print("|cff9580ffTwichUI:|r Sending connection test to " .. self.receiver .. "...")
 
         local ACR = (T.Libs and T.Libs.AceConfigRegistry) or LibStub("AceConfigRegistry-3.0-ElvUI", true) or
-        LibStub("AceConfigRegistry-3.0", true)
+            LibStub("AceConfigRegistry-3.0", true)
         if ACR then ACR:NotifyChange("ElvUI") end
 
         -- Timeout check (5 seconds)
@@ -95,7 +95,7 @@ function RunSharing:SendPing()
             if self.connectionStatus == "PENDING" then
                 self.connectionStatus = "FAILED"
                 local ACR = (T.Libs and T.Libs.AceConfigRegistry) or LibStub("AceConfigRegistry-3.0-ElvUI", true) or
-                LibStub("AceConfigRegistry-3.0", true)
+                    LibStub("AceConfigRegistry-3.0", true)
                 if ACR then ACR:NotifyChange("ElvUI") end
             end
         end)
@@ -124,7 +124,7 @@ function RunSharing:OnCommReceived(prefix, message, distribution, sender)
             self.connectionStatus = "SUCCESS"
             print("|cff9580ffTwichUI:|r Connection confirmed! Received response from " .. sender)
             local ACR = (T.Libs and T.Libs.AceConfigRegistry) or LibStub("AceConfigRegistry-3.0-ElvUI", true) or
-            LibStub("AceConfigRegistry-3.0", true)
+                LibStub("AceConfigRegistry-3.0", true)
             if ACR then ACR:NotifyChange("ElvUI") end
             return
         end
@@ -146,4 +146,9 @@ function RunSharing:ProcessReceivedRun(sender, runData)
     })
 
     Logger.Info("Received Mythic+ run data from " .. sender)
+
+    -- Notify UI if available
+    if MythicPlusModule.RunSharingFrame and MythicPlusModule.RunSharingFrame.UpdateList then
+        MythicPlusModule.RunSharingFrame:UpdateList()
+    end
 end

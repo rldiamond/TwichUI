@@ -661,7 +661,8 @@ function MythicPlusRunLogger:ToggleRunLogFrame()
 end
 
 ---@param mapId number|nil
-function MythicPlusRunLogger:_StartNewRun(mapId)
+---@param dungeonName string|nil
+function MythicPlusRunLogger:_StartNewRun(mapId, dungeonName)
     local db = GetDB()
     db.active = nil
     db.lastCompleted = nil
@@ -679,6 +680,7 @@ function MythicPlusRunLogger:_StartNewRun(mapId)
         startDate = date("%Y-%m-%d %H:%M:%S", nowUnix),
         startRel = nowRel,
         mapId = tonumber(mapId) or nil,
+        dungeonName = dungeonName, -- Store resolved name
         level = tonumber(level) or nil,
         affixes = (type(affixes) == "table") and affixes or nil,
         player = BuildPlayerSnapshot(),
@@ -762,10 +764,31 @@ end
 function MythicPlusRunLogger:_OnDungeonEvent(eventName, ...)
     if not self.enabled then return end
 
+    if eventName == "TWICH_DUNGEON_START" then
+        local mapId, dungeonName = ...
+        -- If we already started a run via CHALLENGE_MODE_START (race condition), update it
+        local db = GetDB()
+        if db.active and db.active.status == "in_progress" then
+            if not db.active.dungeonName then
+                db.active.dungeonName = dungeonName
+                Logger.Debug("RunLogger: Updated active run with resolved dungeon name: " .. tostring(dungeonName))
+            end
+        else
+            -- Otherwise start a new run with this info
+            self:_StartNewRun(mapId, dungeonName)
+            self:_AppendEvent("CHALLENGE_MODE_START", { mapId = tonumber(mapId) or mapId })
+        end
+        return
+    end
+
     if eventName == "CHALLENGE_MODE_START" then
         local mapId = ...
-        self:_StartNewRun(mapId)
-        self:_AppendEvent(eventName, { mapId = tonumber(mapId) or mapId })
+        -- Only start if we haven't already (via TWICH_DUNGEON_START)
+        local db = GetDB()
+        if not db.active or db.active.status ~= "in_progress" then
+            self:_StartNewRun(mapId)
+            self:_AppendEvent(eventName, { mapId = tonumber(mapId) or mapId })
+        end
         return
     end
 

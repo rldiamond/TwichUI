@@ -84,7 +84,16 @@ Sim.SupportedEvents = Sim.SupportedEvents or {
 ---@return any ...
 local function BuildSampleEventArgs(eventName)
     if eventName == "CHALLENGE_MODE_START" then
-        return 525
+        local mapID = 525
+        -- Simulate the resolution event first
+        local name = C_ChallengeMode.GetMapUIInfo(mapID) or "Simulated Dungeon"
+
+        local dm = GetDungeonMonitor()
+        if dm and type(dm.EventHandler) == "function" then
+            dm:EventHandler("TWICH_DUNGEON_START", mapID, name)
+        end
+
+        return mapID
     end
 
     if eventName == "CHALLENGE_MODE_COMPLETED" then
@@ -725,6 +734,12 @@ function Sim:StartSimulationFromData(parsed, opts)
 
     Logger.Info(("Simulator: starting (%d events), speed x%.2f"):format(#events, speed))
     self:_ScheduleNext(token)
+end
+
+---@param ev table
+function Sim:SimulateSingleEvent(ev)
+    if type(ev) ~= "table" then return end
+    self:_DispatchEvent(ev)
 end
 
 -- ----------------------------
