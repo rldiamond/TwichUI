@@ -1,0 +1,9 @@
+package-as: TwichUI
+
+ignore:
+  - SAMPLE_DATA
+  - "*.md"
+
+manual-changelog:
+  filename: CHANGELOG.md
+  markup-type: markdown
