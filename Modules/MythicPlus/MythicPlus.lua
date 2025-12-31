@@ -97,6 +97,10 @@ function MythicPlusModule:Enable()
         self.RunLogger:Initialize()
     end
 
+    if self.RunSharingFrame and self.RunSharingFrame.Initialize then
+        self.RunSharingFrame:Initialize()
+    end
+
     Logger.Debug("Mythic+ module enabled")
 end
 

@@ -58,6 +58,8 @@ local DungeonMonitor = MythicPlusModule.DungeonMonitor
 local API = MythicPlusModule.API
 ---@type MythicPlusScoreCalculatorSubmodule
 local ScoreCalculator = MythicPlusModule.ScoreCalculator
+---@type MythicPlusRunSharingSubmodule
+local RunSharing = MythicPlusModule.RunSharing
 
 ---@type table<string, ConfigEntry>
 local CONFIGURATION = {
@@ -714,7 +716,15 @@ function MythicPlusRunLogger:_FinalizeRun(status, completionPayload)
 
     if run.status == "completed" then
         local text = BuildExportText(run)
-        self:_ShowExport(text)
+
+        local autoShow = CM:GetProfileSettingSafe("developer.mythicplus.runLogger.autoShow", true)
+        if autoShow then
+            self:_ShowExport(text)
+        end
+
+        if RunSharing and RunSharing.SendRun then
+            RunSharing:SendRun(run)
+        end
     end
 
     Logger.Info("Mythic+ run recording finalized.")
@@ -1002,6 +1012,10 @@ end
 function MythicPlusRunLogger:Initialize()
     if self.enabled then return end
 
+    if RunSharing and RunSharing.Initialize then
+        RunSharing:Initialize()
+    end
+
     MigrateLegacyEnableKey()
 
     local shouldEnable = CM:GetProfileSettingSafe(CONFIGURATION.ENABLE.key, nil)
@@ -1012,4 +1026,9 @@ function MythicPlusRunLogger:Initialize()
     if shouldEnable then
         self:Enable()
     end
+end
+
+function MythicPlusRunLogger:GetLastRun()
+    local db = GetDB()
+    return db and db.lastCompleted
 end

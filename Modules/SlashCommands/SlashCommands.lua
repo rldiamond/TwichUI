@@ -72,6 +72,68 @@ SC.COMMANDS = {
     developer = {
         description = "Developer commands",
         subcommands = {
+            runLink = {
+                description = "Link Run Logger to another player (Usage: /twich developer runLink <PlayerName>)",
+                handler = function(args)
+                    local target = args and args:match("%S+")
+                    if not target then
+                        TT.PrintToChatFrame(PrefixWithAddonName(
+                            TT.Color(CT.TWICH.TEXT_ERROR, "Usage: /twich developer runLink <PlayerName>")
+                        ))
+                        return
+                    end
+
+                    local ok, mythicPlus = pcall(function() return T:GetModule("MythicPlus") end)
+                    if not ok or not mythicPlus then return end
+
+                    local rs = mythicPlus.RunSharing
+                    if rs and type(rs.SetReceiver) == "function" then
+                        rs:SetReceiver(target)
+                        TT.PrintToChatFrame(PrefixWithAddonName(
+                            "Run Logger linked to " .. TT.Color(CT.TWICH.PRIMARY_ACCENT, target)
+                        ))
+                    end
+                end
+            },
+            testRunSharing = {
+                description = "Send a dummy run to the linked receiver (for testing)",
+                handler = function()
+                    local ok, mythicPlus = pcall(function() return T:GetModule("MythicPlus") end)
+                    if not ok or not mythicPlus then return end
+
+                    local rs = mythicPlus.RunSharing
+                    if rs and type(rs.SendRun) == "function" then
+                        local dummyRun = {
+                            id = "TEST-RUN-" .. time(),
+                            status = "completed",
+                            mapId = 376, -- The Necrotic Wake
+                            level = 10,
+                            affixes = { 9, 10 },
+                            events = {
+                                { name = "TEST_EVENT", unix = time(), payload = { message = "Hello World" } }
+                            }
+                        }
+                        rs:SendRun(dummyRun)
+                        TT.PrintToChatFrame(PrefixWithAddonName("Sent dummy run data."))
+                    else
+                        TT.PrintToChatFrame(PrefixWithAddonName(
+                            TT.Color(CT.TWICH.TEXT_ERROR, "Run Sharing module not available.")
+                        ))
+                    end
+                end
+            },
+            runs = {
+                description = "Open the Received Runs frame",
+                handler = function()
+                    local ok, mythicPlus = pcall(function() return T:GetModule("MythicPlus") end)
+                    if not ok or not mythicPlus then return end
+
+                    local frame = mythicPlus.RunSharingFrame
+                    if frame and type(frame.Toggle) == "function" then
+                        frame:Toggle()
+                    end
+                end
+            },
             runlog = {
                 description = "Show the Mythic+ Run Logger export frame",
                 handler = function()
@@ -171,15 +233,32 @@ function SC:PrimarySlashHandler(input)
         -- If the command has subcommands, parse the subcommand
         if cmd.subcommands then
             local subcmd = nil
+            local subcmdToken = nil
             if rest and rest ~= "" then
-                subcmd = rest:match("^(%S+)")
+                subcmdToken = rest:match("^(%S+)")
             end
-            subcmd = subcmd and subcmd:lower() or nil
+            subcmd = subcmdToken and subcmdToken:lower() or nil
 
-            if subcmd and cmd.subcommands[subcmd] then
-                local sub = cmd.subcommands[subcmd]
-                if type(sub.handler) == "function" then
-                    sub.handler()
+            if subcmd then
+                -- Case-insensitive lookup
+                local foundSub = nil
+                for k, v in pairs(cmd.subcommands) do
+                    if k:lower() == subcmd then
+                        foundSub = v
+                        subcmd = k -- Restore original casing for length calc if needed, or just use k
+                        break
+                    end
+                end
+
+                if foundSub and type(foundSub.handler) == "function" then
+                    local subRest = ""
+                    -- Re-calculate rest based on the matched token length
+                    -- We matched subcmdToken from rest:match("^(%S+)"), so its length is what we skip
+                    local tokenLen = #subcmdToken
+                    if rest and #rest > tokenLen then
+                        subRest = rest:sub(tokenLen + 1):match("^%s*(.*)") or ""
+                    end
+                    foundSub.handler(subRest)
                     return
                 end
             end

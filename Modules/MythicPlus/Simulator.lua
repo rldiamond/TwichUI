@@ -625,8 +625,19 @@ function Sim:StartSimulationFromJSON(jsonText, opts)
         Logger.Error("Simulator: JSON parse failed: " .. tostring(err))
         return
     end
+
+    self:StartSimulationFromData(parsed, opts)
+end
+
+---@param parsed table
+---@param opts table|nil
+function Sim:StartSimulationFromData(parsed, opts)
+    if self._simState then
+        self:StopSimulation()
+    end
+
     if type(parsed) ~= "table" then
-        Logger.Error("Simulator: JSON root must be an object")
+        Logger.Error("Simulator: Data root must be an object")
         return
     end
     if parsed.format ~= "TwichUI_RunLog_v2" then
