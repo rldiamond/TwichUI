@@ -25,22 +25,22 @@ local SLOT_HEIGHT = 44
 local ICON_SIZE = 36
 
 local SLOTS = {
-    { name = "Head",     slotID = 1,  texture = "Interface\\PaperDoll\\UI-PaperDoll-Slot-Head" },
-    { name = "Neck",     slotID = 2,  texture = "Interface\\PaperDoll\\UI-PaperDoll-Slot-Neck" },
-    { name = "Shoulder", slotID = 3,  texture = "Interface\\PaperDoll\\UI-PaperDoll-Slot-Shoulder" },
-    { name = "Back",     slotID = 15, texture = "Interface\\PaperDoll\\UI-PaperDoll-Slot-Chest" }, -- Back uses Chest icon usually or specific back icon
-    { name = "Chest",    slotID = 5,  texture = "Interface\\PaperDoll\\UI-PaperDoll-Slot-Chest" },
-    { name = "Wrist",    slotID = 9,  texture = "Interface\\PaperDoll\\UI-PaperDoll-Slot-Wrists" },
-    { name = "Hands",    slotID = 10, texture = "Interface\\PaperDoll\\UI-PaperDoll-Slot-Hands" },
-    { name = "Waist",    slotID = 6,  texture = "Interface\\PaperDoll\\UI-PaperDoll-Slot-Waist" },
-    { name = "Legs",     slotID = 7,  texture = "Interface\\PaperDoll\\UI-PaperDoll-Slot-Legs" },
-    { name = "Feet",     slotID = 8,  texture = "Interface\\PaperDoll\\UI-PaperDoll-Slot-Feet" },
-    { name = "First Ring",  slotID = 11, texture = "Interface\\PaperDoll\\UI-PaperDoll-Slot-Finger" },
-    { name = "Second Ring",  slotID = 12, texture = "Interface\\PaperDoll\\UI-PaperDoll-Slot-Finger" },
-    { name = "First Trinket", slotID = 13, texture = "Interface\\PaperDoll\\UI-PaperDoll-Slot-Trinket" },
+    { name = "Head",           slotID = 1,  texture = "Interface\\PaperDoll\\UI-PaperDoll-Slot-Head" },
+    { name = "Neck",           slotID = 2,  texture = "Interface\\PaperDoll\\UI-PaperDoll-Slot-Neck" },
+    { name = "Shoulder",       slotID = 3,  texture = "Interface\\PaperDoll\\UI-PaperDoll-Slot-Shoulder" },
+    { name = "Back",           slotID = 15, texture = "Interface\\PaperDoll\\UI-PaperDoll-Slot-Chest" }, -- Back uses Chest icon usually or specific back icon
+    { name = "Chest",          slotID = 5,  texture = "Interface\\PaperDoll\\UI-PaperDoll-Slot-Chest" },
+    { name = "Wrist",          slotID = 9,  texture = "Interface\\PaperDoll\\UI-PaperDoll-Slot-Wrists" },
+    { name = "Hands",          slotID = 10, texture = "Interface\\PaperDoll\\UI-PaperDoll-Slot-Hands" },
+    { name = "Waist",          slotID = 6,  texture = "Interface\\PaperDoll\\UI-PaperDoll-Slot-Waist" },
+    { name = "Legs",           slotID = 7,  texture = "Interface\\PaperDoll\\UI-PaperDoll-Slot-Legs" },
+    { name = "Feet",           slotID = 8,  texture = "Interface\\PaperDoll\\UI-PaperDoll-Slot-Feet" },
+    { name = "First Ring",     slotID = 11, texture = "Interface\\PaperDoll\\UI-PaperDoll-Slot-Finger" },
+    { name = "Second Ring",    slotID = 12, texture = "Interface\\PaperDoll\\UI-PaperDoll-Slot-Finger" },
+    { name = "First Trinket",  slotID = 13, texture = "Interface\\PaperDoll\\UI-PaperDoll-Slot-Trinket" },
     { name = "Second Trinket", slotID = 14, texture = "Interface\\PaperDoll\\UI-PaperDoll-Slot-Trinket" },
-    { name = "MainHand", slotID = 16, texture = "Interface\\PaperDoll\\UI-PaperDoll-Slot-MainHand" },
-    { name = "OffHand",  slotID = 17, texture = "Interface\\PaperDoll\\UI-PaperDoll-Slot-SecondaryHand" },
+    { name = "MainHand",       slotID = 16, texture = "Interface\\PaperDoll\\UI-PaperDoll-Slot-MainHand" },
+    { name = "OffHand",        slotID = 17, texture = "Interface\\PaperDoll\\UI-PaperDoll-Slot-SecondaryHand" },
 }
 
 -- Fix Back texture
@@ -952,7 +952,8 @@ local function CreateChooserFrame(parent)
     customDesc:SetPoint("TOPLEFT", 10, -10)
     customDesc:SetPoint("TOPRIGHT", -10, -10)
     customDesc:SetJustifyH("LEFT")
-    customDesc:SetText("The Best in Slot module tracks items from the current Mythic+ season.\n\nIf you want to track an item from a different source (e.g. World Boss, PvP, Crafting, or Legacy Content), you can add it manually here.")
+    customDesc:SetText(
+    "The Best in Slot module tracks items from the current Mythic+ season.\n\nIf you want to track an item from a different source (e.g. World Boss, PvP, Crafting, or Legacy Content), you can add it manually here.")
     customDesc:SetTextColor(0.7, 0.7, 0.7)
 
     -- Input Label
@@ -1022,7 +1023,7 @@ local function CreateChooserFrame(parent)
             f.CustomItemResult:SetText(link)
             f.Preview:SetText(link)
             f.AddBtn:Enable()
-            
+
             local icon = GetItemIcon(link)
             if icon then
                 f.CustomItemResultIcon:SetTexture(icon)

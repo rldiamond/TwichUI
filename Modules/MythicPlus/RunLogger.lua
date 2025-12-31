@@ -888,10 +888,22 @@ function MythicPlusRunLogger:_OnDungeonEvent(eventName, ...)
     if eventName == "PLAYER_ENTERING_WORLD" then
         -- Keep payload minimal; this fires often and can include instance transitions.
         local isInitialLogin, isReloadingUi = ...
+        local isCM = C_ChallengeMode and C_ChallengeMode.IsChallengeModeActive()
+
         self:_AppendEvent(eventName, {
             isInitialLogin = isInitialLogin,
             isReloadingUi = isReloadingUi,
+            isChallengeModeActive = isCM, -- Log for debugging
         })
+
+        -- Failsafe: Ensure run is finalized if we are no longer in a challenge mode
+        local db = GetDB()
+        if db.active then
+            if not isCM then
+                self:_AppendEvent("FAILSAFE_FINISH", { reason = "not_in_challenge_mode" })
+                self:_FinalizeRun("completed")
+            end
+        end
         return
     end
 
