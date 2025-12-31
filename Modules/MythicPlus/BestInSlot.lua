@@ -86,18 +86,18 @@ local CLASS_ARMOR_TYPE = {
 
 local CLASS_WEAPON_TYPES = {
     [1] = { [0] = true, [1] = true, [2] = true, [3] = true, [4] = true, [5] = true, [6] = true, [7] = true, [8] = true, [10] = true, [13] = true, [15] = true, [18] = true }, -- Warrior
-    [2] = { [0] = true, [1] = true, [4] = true, [5] = true, [6] = true, [7] = true, [8] = true },                                                   -- Paladin
-    [3] = { [0] = true, [1] = true, [2] = true, [3] = true, [6] = true, [7] = true, [8] = true, [10] = true, [13] = true, [15] = true, [18] = true }, -- Hunter
-    [4] = { [0] = true, [4] = true, [7] = true, [13] = true, [15] = true, [2] = true, [3] = true, [18] = true },                                    -- Rogue
-    [5] = { [4] = true, [10] = true, [15] = true, [19] = true },                                                                                    -- Priest
-    [6] = { [0] = true, [1] = true, [4] = true, [5] = true, [6] = true, [7] = true, [8] = true },                                                   -- DK
-    [7] = { [0] = true, [1] = true, [4] = true, [5] = true, [10] = true, [13] = true, [15] = true },                                                -- Shaman
-    [8] = { [7] = true, [10] = true, [15] = true, [19] = true },                                                                                    -- Mage
-    [9] = { [7] = true, [10] = true, [15] = true, [19] = true },                                                                                    -- Warlock
-    [10] = { [0] = true, [4] = true, [6] = true, [7] = true, [10] = true, [13] = true },                                                            -- Monk
-    [11] = { [4] = true, [5] = true, [6] = true, [10] = true, [13] = true, [15] = true },                                                           -- Druid
-    [12] = { [0] = true, [7] = true, [9] = true, [13] = true, [15] = true },                                                                        -- DH
-    [13] = { [0] = true, [1] = true, [4] = true, [5] = true, [7] = true, [8] = true, [10] = true, [13] = true, [15] = true },                       -- Evoker
+    [2] = { [0] = true, [1] = true, [4] = true, [5] = true, [6] = true, [7] = true, [8] = true },                                                                             -- Paladin
+    [3] = { [0] = true, [1] = true, [2] = true, [3] = true, [6] = true, [7] = true, [8] = true, [10] = true, [13] = true, [15] = true, [18] = true },                         -- Hunter
+    [4] = { [0] = true, [4] = true, [7] = true, [13] = true, [15] = true, [2] = true, [3] = true, [18] = true },                                                              -- Rogue
+    [5] = { [4] = true, [10] = true, [15] = true, [19] = true },                                                                                                              -- Priest
+    [6] = { [0] = true, [1] = true, [4] = true, [5] = true, [6] = true, [7] = true, [8] = true },                                                                             -- DK
+    [7] = { [0] = true, [1] = true, [4] = true, [5] = true, [10] = true, [13] = true, [15] = true },                                                                          -- Shaman
+    [8] = { [7] = true, [10] = true, [15] = true, [19] = true },                                                                                                              -- Mage
+    [9] = { [7] = true, [10] = true, [15] = true, [19] = true },                                                                                                              -- Warlock
+    [10] = { [0] = true, [4] = true, [6] = true, [7] = true, [10] = true, [13] = true },                                                                                      -- Monk
+    [11] = { [4] = true, [5] = true, [6] = true, [10] = true, [13] = true, [15] = true },                                                                                     -- Druid
+    [12] = { [0] = true, [7] = true, [9] = true, [13] = true, [15] = true },                                                                                                  -- DH
+    [13] = { [0] = true, [1] = true, [4] = true, [5] = true, [7] = true, [8] = true, [10] = true, [13] = true, [15] = true },                                                 -- Evoker
 }
 
 local function IsItemUsableByPlayer(itemClassID, itemSubClassID, itemEquipLoc)
@@ -680,7 +680,8 @@ end
 
 local function CreateChooserFrame(parent)
     local UpdateItemsList -- Forward declaration
-    local f = CreateFrame("Frame", "TwichUI_BiS_Chooser", parent)
+    -- Parent to UIParent so it can be moved independently of the main window
+    local f = CreateFrame("Frame", "TwichUI_BiS_Chooser", UIParent)
 
     -- Logic Initialization
     f.selectedSource = nil
@@ -695,6 +696,44 @@ local function CreateChooserFrame(parent)
     f:SetFrameStrata("FULLSCREEN_DIALOG")
     f:SetFrameLevel(100)
     f:EnableMouse(true)
+    f:SetMovable(true)
+    f:RegisterForDrag("LeftButton")
+    f:SetScript("OnDragStart", function(self) self:StartMoving() end)
+    f:SetScript("OnDragStop", function(self) self:StopMovingOrSizing() end)
+
+    -- Animation Groups
+    f.FadeInGroup = f:CreateAnimationGroup()
+    f.FadeInAnim = f.FadeInGroup:CreateAnimation("Alpha")
+    f.FadeInAnim:SetDuration(0.2)
+    f.FadeInAnim:SetToAlpha(1)
+    f.FadeInAnim:SetSmoothing("OUT")
+    f.FadeInGroup:SetScript("OnFinished", function() f:SetAlpha(1) end)
+
+    f.FadeOutGroup = f:CreateAnimationGroup()
+    f.FadeOutAnim = f.FadeOutGroup:CreateAnimation("Alpha")
+    f.FadeOutAnim:SetDuration(0.2)
+    f.FadeOutAnim:SetToAlpha(0)
+    f.FadeOutAnim:SetSmoothing("OUT")
+    f.FadeOutGroup:SetScript("OnFinished", function()
+        f:Hide()
+        f:SetAlpha(1)
+    end)
+
+    function f:ShowAnimated()
+        f.FadeOutGroup:Stop()
+        if not f:IsShown() then
+            f:SetAlpha(0)
+            f:Show()
+        end
+        f.FadeInAnim:SetFromAlpha(f:GetAlpha())
+        f.FadeInGroup:Play()
+    end
+
+    function f:HideAnimated()
+        f.FadeInGroup:Stop()
+        f.FadeOutAnim:SetFromAlpha(f:GetAlpha())
+        f.FadeOutGroup:Play()
+    end
 
     if E then
         f:SetTemplate("Default")
@@ -723,6 +762,7 @@ local function CreateChooserFrame(parent)
 
     local close = CreateFrame("Button", nil, f, "UIPanelCloseButton")
     close:SetPoint("TOPRIGHT", -5, -5)
+    close:SetScript("OnClick", function() f:HideAnimated() end)
     if E then E:GetModule("Skins"):HandleCloseButton(close) end
 
     -- 1. Search Input
@@ -971,7 +1011,9 @@ local function CreateChooserFrame(parent)
             if not item:IsItemEmpty() then
                 item:ContinueOnItemLoad(function()
                     local _, l = GetItemInfo(item:GetItemID())
-                    if l then SetItem(l) else
+                    if l then
+                        SetItem(l)
+                    else
                         f.CustomItemResult:SetText("Item not found")
                         f.AddBtn:Disable()
                     end
@@ -983,7 +1025,9 @@ local function CreateChooserFrame(parent)
                     local item = Item:CreateFromItemID(id)
                     item:ContinueOnItemLoad(function()
                         local _, l = GetItemInfo(id)
-                        if l then SetItem(l) else
+                        if l then
+                            SetItem(l)
+                        else
                             f.CustomItemResult:SetText("Item not found")
                             f.AddBtn:Disable()
                         end
@@ -1166,13 +1210,13 @@ local function CreateChooserFrame(parent)
     end
 
     local DIFF_INFO = {
-        [16] = { label = "Mythic", color = { 0.64, 0.21, 0.93 } },    -- Purple
-        [15] = { label = "Heroic", color = { 0, 0.7, 1 } },           -- Blue
-        [14] = { label = "Normal", color = { 0.2, 1, 0.2 } },         -- Green
-        [17] = { label = "Raid Finder", color = { 0.7, 0.7, 0.7 } },  -- Grey
-        [23] = { label = "Mythic", color = { 0.64, 0.21, 0.93 } },    -- Purple
-        [2]  = { label = "Heroic", color = { 0, 0.7, 1 } },           -- Blue
-        [1]  = { label = "Normal", color = { 0.2, 1, 0.2 } },         -- Green
+        [16] = { label = "Mythic", color = { 0.64, 0.21, 0.93 } }, -- Purple
+        [15] = { label = "Heroic", color = { 0, 0.7, 1 } },        -- Blue
+        [14] = { label = "Normal", color = { 0.2, 1, 0.2 } },      -- Green
+        [17] = { label = "Raid Finder", color = { 1, 0.82, 0 } },  -- Gold
+        [23] = { label = "Mythic", color = { 0.64, 0.21, 0.93 } }, -- Purple
+        [2]  = { label = "Heroic", color = { 0, 0.7, 1 } },        -- Blue
+        [1]  = { label = "Normal", color = { 0.2, 1, 0.2 } },      -- Green
     }
 
     UpdateItemsList = function()
@@ -1299,7 +1343,7 @@ local function CreateChooserFrame(parent)
                     for _, v in ipairs(versions) do
                         local linkToUse = v.link
                         local name, link, _, _, _, _, _, _, itemEquipLoc, icon, _, itemClassID, itemSubClassID =
-                        GetItemInfo(linkToUse)
+                            GetItemInfo(linkToUse)
                         if not name then
                             missingItems = true
                             if type(linkToUse) == "string" then
@@ -1318,8 +1362,15 @@ local function CreateChooserFrame(parent)
                                 if usable then
                                     if searchText == "" or name:lower():find(searchText, 1, true) then
                                         table.insert(items,
-                                            { id = itemID, name = name, link = link, icon = icon, diffID = v.diffID, source =
-                                            source })
+                                            {
+                                                id = itemID,
+                                                name = name,
+                                                link = link,
+                                                icon = icon,
+                                                diffID = v.diffID,
+                                                source =
+                                                    source
+                                            })
                                     end
                                 end
                             end
@@ -1359,7 +1410,7 @@ local function CreateChooserFrame(parent)
                 end
 
                 local name, link, _, _, _, _, _, _, itemEquipLoc, icon, _, itemClassID, itemSubClassID = GetItemInfo(
-                linkToUse)
+                    linkToUse)
                 if not name then
                     -- Request info
                     local item = (type(linkToUse) == "string") and Item:CreateFromItemLink(linkToUse) or
@@ -1527,12 +1578,12 @@ local function CreateChooserFrame(parent)
 
                 if f.callback then
                     f.callback({ link = itemLink, source = (sourceText or "Custom") })
-                    f:Hide()
+                    f:HideAnimated()
                 end
             end
         elseif f.selectedItemLink and f.callback then
             f.callback({ link = f.selectedItemLink, source = f.selectedSource })
-            f:Hide()
+            f:HideAnimated()
         end
     end)
 
@@ -1583,8 +1634,8 @@ local function CreateChooserFrame(parent)
             end)
 
             btn:SetScript("OnClick", function()
-                for _, b in ipairs(f.sourceButtons) do 
-                    b.Highlight:Hide() 
+                for _, b in ipairs(f.sourceButtons) do
+                    b.Highlight:Hide()
                     -- Reset color for others just in case
                     b.Highlight:SetColorTexture(1, 1, 1, 0.1)
                 end
@@ -1978,7 +2029,7 @@ local function CreateBestInSlotPanel(parent)
         end)
 
         f:SetScript("OnClick", function(self)
-            Chooser:Show()
+            Chooser:ShowAnimated()
             Chooser.Title:SetText("Select " .. slotData.name)
 
             local db = GetCharacterDB()

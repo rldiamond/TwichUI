@@ -254,6 +254,31 @@ function MainWindow:GetActivePanelId()
     return self.activePanelId
 end
 
+local function AttachAnimations(frame)
+    if frame.FadeInGroup then return end
+    
+    frame.FadeInGroup = frame:CreateAnimationGroup()
+    frame.FadeInAnim = frame.FadeInGroup:CreateAnimation("Alpha")
+    frame.FadeInAnim:SetDuration(0.2)
+    frame.FadeInAnim:SetToAlpha(1)
+    frame.FadeInAnim:SetSmoothing("OUT")
+    frame.FadeInGroup:SetScript("OnFinished", function() frame:SetAlpha(1) end)
+
+    frame.FadeOutGroup = frame:CreateAnimationGroup()
+    frame.FadeOutAnim = frame.FadeOutGroup:CreateAnimation("Alpha")
+    frame.FadeOutAnim:SetDuration(0.2)
+    frame.FadeOutAnim:SetToAlpha(0)
+    frame.FadeOutAnim:SetSmoothing("OUT")
+    frame.FadeOutGroup:SetScript("OnFinished", function() 
+        frame:Hide() 
+        frame:SetAlpha(1) 
+        if frame.onHideCallback then
+            frame.onHideCallback()
+            frame.onHideCallback = nil
+        end
+    end)
+end
+
 ---@param id string
 ---@return boolean
 function MainWindow:ShowPanel(id)
@@ -277,10 +302,18 @@ function MainWindow:ShowPanel(id)
     if self.activePanelId and self.activePanelId ~= id then
         local current = self._panels[self.activePanelId]
         if current and current.frame then
-            if type(current.onHide) == "function" then
-                pcall(current.onHide, current.frame, self)
+            AttachAnimations(current.frame)
+            
+            -- Store onHide callback to be called after animation
+            current.frame.onHideCallback = function()
+                if type(current.onHide) == "function" then
+                    pcall(current.onHide, current.frame, self)
+                end
             end
-            current.frame:Hide()
+            
+            current.frame.FadeInGroup:Stop()
+            current.frame.FadeOutAnim:SetFromAlpha(current.frame:GetAlpha())
+            current.frame.FadeOutGroup:Play()
         end
     end
 
@@ -304,8 +337,18 @@ function MainWindow:ShowPanel(id)
         end
     end
 
+    AttachAnimations(nextPanel.frame)
+
     self.activePanelId = id
+    
+    nextPanel.frame.FadeOutGroup:Stop()
+    if not nextPanel.frame:IsShown() then
+        nextPanel.frame:SetAlpha(0)
+    end
     nextPanel.frame:Show()
+    nextPanel.frame.FadeInAnim:SetFromAlpha(nextPanel.frame:GetAlpha())
+    nextPanel.frame.FadeInGroup:Play()
+
     if type(nextPanel.onShow) == "function" then
         pcall(nextPanel.onShow, nextPanel.frame, self)
     end
@@ -890,6 +933,24 @@ function MainWindow:CreateFrame()
     frame:SetScale(scale)
     frame:SetAlpha(alpha)
 
+    -- Animation Groups
+    frame.FadeInGroup = frame:CreateAnimationGroup()
+    frame.FadeInAnim = frame.FadeInGroup:CreateAnimation("Alpha")
+    frame.FadeInAnim:SetDuration(0.2)
+    frame.FadeInAnim:SetToAlpha(1)
+    frame.FadeInAnim:SetSmoothing("OUT")
+    frame.FadeInGroup:SetScript("OnFinished", function() frame:SetAlpha(1) end)
+
+    frame.FadeOutGroup = frame:CreateAnimationGroup()
+    frame.FadeOutAnim = frame.FadeOutGroup:CreateAnimation("Alpha")
+    frame.FadeOutAnim:SetDuration(0.2)
+    frame.FadeOutAnim:SetToAlpha(0)
+    frame.FadeOutAnim:SetSmoothing("OUT")
+    frame.FadeOutGroup:SetScript("OnFinished", function()
+        frame:Hide()
+        frame:SetAlpha(1)
+    end)
+
     self:RestoreFramePosition()
 
     if frame.GetName then
@@ -927,12 +988,34 @@ function MainWindow:RefreshLayout()
     self:UpdateLockState()
 end
 
+function MainWindow:ShowAnimated()
+    if not self.frame then return end
+    local f = self.frame
+
+    f.FadeOutGroup:Stop()
+    if not f:IsShown() then
+        f:SetAlpha(0)
+        f:Show()
+    end
+    f.FadeInAnim:SetFromAlpha(f:GetAlpha())
+    f.FadeInGroup:Play()
+end
+
+function MainWindow:HideAnimated()
+    if not self.frame then return end
+    local f = self.frame
+
+    f.FadeInGroup:Stop()
+    f.FadeOutAnim:SetFromAlpha(f:GetAlpha())
+    f.FadeOutGroup:Play()
+end
+
 ---@param persist boolean|nil When true (default), writes to the saved MAIN_WINDOW_ENABLED setting.
 function MainWindow:Enable(persist)
     if self:IsEnabled() then
         -- Ensure the existing frame is visible (important during reload/login timing).
         if self.frame then
-            self.frame:Show()
+            self:ShowAnimated()
         end
         if self.nav then
             self:RefreshNav()
@@ -958,7 +1041,7 @@ function MainWindow:Enable(persist)
     self:UpdateKeystoneHeader()
 
     if self.frame then
-        self.frame:Show()
+        self:ShowAnimated()
     end
 
     if self.nav then
@@ -978,7 +1061,7 @@ function MainWindow:Disable(persist)
     end
 
     if self.frame then
-        self.frame:Hide()
+        self:HideAnimated()
     end
 end
 
