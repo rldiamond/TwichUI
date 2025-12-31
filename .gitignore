@@ -1,0 +1,14 @@
+# macos
+.DS_Store
+
+# IDEs and editors
+.vscode
+.vs
+.idea
+
+# pipeline
+.release
+
+# Library files (these are added by the packager)
+Libraries/*
+!Libraries/!load.xml
