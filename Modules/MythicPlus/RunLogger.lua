@@ -665,7 +665,7 @@ end
 function MythicPlusRunLogger:_StartNewRun(mapId, dungeonName)
     local db = GetDB()
     db.active = nil
-    db.lastCompleted = nil
+    -- db.lastCompleted = nil -- Keep last completed for history/reference
 
     local nowUnix = time()
     local nowRel = GetTime()
@@ -717,15 +717,14 @@ function MythicPlusRunLogger:_FinalizeRun(status, completionPayload)
     db.active = nil
 
     if run.status == "completed" then
+        self:_AddToHistory(run)
+        self:_SyncHistory()
+
         local text = BuildExportText(run)
 
         local autoShow = CM:GetProfileSettingSafe("developer.mythicplus.runLogger.autoShow", true)
         if autoShow then
             self:_ShowExport(text)
-        end
-
-        if RunSharing and RunSharing.SendRun then
-            RunSharing:SendRun(run)
         end
     end
 
@@ -1027,6 +1026,17 @@ function MythicPlusRunLogger:Enable()
         self:_OnDungeonEvent(eventName, ...)
     end)
 
+    -- Start periodic sync check
+    if self.syncTimer then self.syncTimer:Cancel() end
+    self.syncTimer = C_Timer.NewTicker(60, function()
+        local db = GetDB()
+        if db.runHistory and #db.runHistory > 0 then
+            if RunSharing and RunSharing.SendPing then
+                RunSharing:SendPing(true)  -- Silent ping
+            end
+        end
+    end)
+
     Logger.Debug("Mythic plus run logger enabled")
 end
 
@@ -1040,6 +1050,11 @@ function MythicPlusRunLogger:Disable()
         self._callbackHandle = nil
     end
 
+    if self.syncTimer then
+        self.syncTimer:Cancel()
+        self.syncTimer = nil
+    end
+
     if self._frame then
         self._frame:Hide()
     end
@@ -1047,11 +1062,65 @@ function MythicPlusRunLogger:Disable()
     Logger.Debug("Mythic plus run logger disabled")
 end
 
+function MythicPlusRunLogger:_AddToHistory(run)
+    local db = GetDB()
+    if not db.runHistory then db.runHistory = {} end
+
+    -- Add to end
+    table.insert(db.runHistory, run)
+
+    -- Check limit
+    local limit = CM:GetProfileSettingSafe("developer.mythicplus.runLogger.historySize", 5)
+    while #db.runHistory > limit do
+        table.remove(db.runHistory, 1) -- Remove oldest
+    end
+end
+
+function MythicPlusRunLogger:_SyncHistory()
+    local db = GetDB()
+    if not db.runHistory or #db.runHistory == 0 then return end
+
+    if not RunSharing or not RunSharing.SendRun then return end
+
+    -- If not linked, do nothing
+    if not RunSharing.receiver then return end
+
+    -- Send all runs in history
+    for _, run in ipairs(db.runHistory) do
+        RunSharing:SendRun(run)
+    end
+end
+
+function MythicPlusRunLogger:_OnRunAcknowledged(runId, sender)
+    local db = GetDB()
+    if not db.runHistory then return end
+
+    for i, run in ipairs(db.runHistory) do
+        if run.id == runId then
+            table.remove(db.runHistory, i)
+            Logger.Info("Run " .. runId .. " acknowledged by " .. sender .. ". Removed from history.")
+            break
+        end
+    end
+end
+
 function MythicPlusRunLogger:Initialize()
     if self.enabled then return end
 
     if RunSharing and RunSharing.Initialize then
         RunSharing:Initialize()
+
+        if RunSharing.OnRunAcknowledged then
+            RunSharing.OnRunAcknowledged:Register(function(runId, sender)
+                self:_OnRunAcknowledged(runId, sender)
+            end)
+        end
+
+        if RunSharing.OnConnectionEstablished then
+            RunSharing.OnConnectionEstablished:Register(function(sender)
+                self:_SyncHistory()
+            end)
+        end
     end
 
     MigrateLegacyEnableKey()

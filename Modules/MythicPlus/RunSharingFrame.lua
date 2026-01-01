@@ -31,7 +31,7 @@ local Skins = E and E.GetModule and E:GetModule("Skins", true)
 local ROW_HEIGHT = 20
 local MAX_ROWS = 15
 
-StaticPopupDialogs["TWICHUI_CONFIRM_DELETE_RUN"] = {
+StaticPopupDialogs["TWICHUI_CONFIRM_DELETE_REMOTE_RUN"] = {
     text = "Are you sure you want to delete this run?",
     button1 = "Yes",
     button2 = "No",
@@ -583,9 +583,12 @@ function RunSharingFrame:CreateFrame()
 
                 self:HighlightPlayingRow(index)
             elseif event == "SIMULATOR_RESUMED" then
-                local maxDuration, startedAt, speed, events = ...
+                local maxDuration, startedAt, speed, events, index, total = ...
                 self:StartProgressAnimation(maxDuration, startedAt, speed, events)
                 self:UpdateSimButtons(true, false)
+                if index and total and self.eventText then
+                    self.eventText:SetText(string.format("Event: %d / %d", index, total))
+                end
             elseif event == "SIMULATOR_STOPPED" then
                 self:StopProgressAnimation()
                 self:UpdateSimButtons(false, false)
@@ -1475,7 +1478,7 @@ end
 function RunSharingFrame:OnDeleteClick(index)
     self.runToDeleteIndex = index or self.selectedIndex
     if not self.runToDeleteIndex then return end
-    StaticPopup_Show("TWICHUI_CONFIRM_DELETE_RUN")
+    StaticPopup_Show("TWICHUI_CONFIRM_DELETE_REMOTE_RUN")
 end
 
 function RunSharingFrame:PerformDelete()

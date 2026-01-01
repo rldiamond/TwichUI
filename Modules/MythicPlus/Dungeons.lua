@@ -1525,7 +1525,7 @@ UpdateDetailsRuns = function(panel, mapId)
     end
 end
 
-local function UpdateDetails(panel, mapId)
+local function UpdateDetailsContent(panel, mapId)
     UpdateDetailsRuns(panel, mapId)
     ---@cast panel TwichUI_MythicPlus_DungeonsPanel
     mapId = tonumber(mapId)
@@ -1565,6 +1565,37 @@ local function UpdateDetails(panel, mapId)
         t:SetText("+3: " .. FormatTime(timeLimit and (timeLimit * 0.6) or nil))
         if t.SetTextColor then t:SetTextColor(0.64, 0.21, 0.93) end
     end
+end
+
+local function UpdateDetails(panel, mapId)
+    mapId = tonumber(mapId)
+    local header = panel.__twichuiDetailsHeader
+    local runs = panel.__twichuiDetailsRuns and panel.__twichuiDetailsRuns.frame
+
+    -- If missing frames or UIFrameFadeOut, or first load, just update
+    if not header or not runs or not UIFrameFadeOut or not panel.__twichuiLastDisplayedMapId then
+        panel.__twichuiLastDisplayedMapId = mapId
+        UpdateDetailsContent(panel, mapId)
+        return
+    end
+
+    if panel.__twichuiLastDisplayedMapId == mapId then
+        UpdateDetailsContent(panel, mapId)
+        return
+    end
+
+    panel.__twichuiLastDisplayedMapId = mapId
+
+    -- Fade out
+    UIFrameFadeOut(header, 0.15, header:GetAlpha(), 0)
+    UIFrameFadeOut(runs, 0.15, runs:GetAlpha(), 0)
+
+    C_Timer.After(0.15, function()
+        if panel.__twichuiSelectedMapId ~= mapId then return end
+        UpdateDetailsContent(panel, mapId)
+        UIFrameFadeIn(header, 0.15, 0, 1)
+        UIFrameFadeIn(runs, 0.15, 0, 1)
+    end)
 end
 
 ---@param panel Frame
@@ -1856,6 +1887,7 @@ local function CreateDungeonsPanel(parent)
     emptyText:Hide()
 
     local detailsHeader = CreateFrame("Frame", nil, right)
+    panel.__twichuiDetailsHeader = detailsHeader
     detailsHeader:SetHeight(80)
     detailsHeader:SetPoint("TOPLEFT", right, "TOPLEFT", 0, 0)
     detailsHeader:SetPoint("TOPRIGHT", right, "TOPRIGHT", 0, 0)

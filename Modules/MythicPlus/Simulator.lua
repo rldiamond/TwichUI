@@ -647,6 +647,7 @@ function Sim:PauseSimulation()
     st.paused = true
     st.pauseStart = GetTime()
     self._simToken = (self._simToken or 0) + 1 -- Invalidate pending timers
+    st.token = self._simToken
 
     Logger.Info("Simulator: paused")
     self:_FireCallback("SIMULATOR_PAUSED")
@@ -664,9 +665,10 @@ function Sim:ResumeSimulation()
 
     self._simToken = (self._simToken or 0) + 1
     local token = self._simToken
+    st.token = token
 
     Logger.Info("Simulator: resumed")
-    self:_FireCallback("SIMULATOR_RESUMED", st.maxDuration, st.startedAt, st.speed, st.events)
+    self:_FireCallback("SIMULATOR_RESUMED", st.maxDuration, st.startedAt, st.speed, st.events, st.index, st.total)
     self:_ScheduleNext(token)
 end
 
@@ -688,6 +690,10 @@ function Sim:SeekSimulation(targetTime)
         prevRel = rel
     end
 
+    -- FAST FORWARD / REWIND LOGIC
+    -- We skip replaying events to avoid side effects (sounds, chat messages) during scrubbing.
+    -- We just update the index and time.
+
     st.index = newIndex
     st.prevRel = prevRel
 
@@ -703,13 +709,14 @@ function Sim:SeekSimulation(targetTime)
 
     self._simToken = (self._simToken or 0) + 1
     local token = self._simToken
+    st.token = token
 
     Logger.Info(("Simulator: seeked to %.1fs"):format(targetTime))
 
     if st.paused then
         self:_FireCallback("SIMULATOR_SEEKED", targetTime, st.index, st.total)
     else
-        self:_FireCallback("SIMULATOR_RESUMED", st.maxDuration, st.startedAt, st.speed, st.events)
+        self:_FireCallback("SIMULATOR_RESUMED", st.maxDuration, st.startedAt, st.speed, st.events, st.index, st.total)
         self:_ScheduleNext(token)
     end
 end

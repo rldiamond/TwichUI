@@ -19,6 +19,8 @@ MythicPlusModule.RunSharing = RunSharing
 local Logger = T:GetModule("Logger")
 ---@type ConfigurationModule
 local CM = T:GetModule("Configuration")
+---@type ToolsModule
+local Tools = T:GetModule("Tools")
 
 local time = _G.time
 local LibStub = _G.LibStub
@@ -52,6 +54,9 @@ function RunSharing:Initialize()
 
     self:RegisterComm(PREFIX, "OnCommReceived")
 
+    self.OnRunAcknowledged = Tools.Callback:New()
+    self.OnConnectionEstablished = Tools.Callback:New()
+
     local db = GetDB()
     self.receiver = db.linkedReceiver
     self.connectionStatus = "NONE"
@@ -78,15 +83,18 @@ function RunSharing:SendRun(runData)
     self:SendCommMessage(PREFIX, serialized, "WHISPER", self.receiver)
 end
 
-function RunSharing:SendPing()
+function RunSharing:SendPing(silent)
     if not self.receiver then return end
 
-    local payload = { type = "PING" }
+    local payload = { type = "PING", silent = silent }
     local serialized = self:Serialize(payload)
     if serialized then
         self.connectionStatus = "PENDING"
         self:SendCommMessage(PREFIX, serialized, "WHISPER", self.receiver)
-        print("|cff9580ffTwichUI:|r Sending connection test to " .. self.receiver .. "...")
+
+        if not silent then
+            print("|cff9580ffTwichUI:|r Sending connection test to " .. self.receiver .. "...")
+        end
 
         local ACR = (T.Libs and T.Libs.AceConfigRegistry) or LibStub("AceConfigRegistry-3.0-ElvUI", true) or
             LibStub("AceConfigRegistry-3.0", true)
@@ -116,7 +124,7 @@ function RunSharing:OnCommReceived(prefix, message, distribution, sender)
     if type(data) == "table" then
         if data.type == "PING" then
             -- Reply with PONG
-            local pong = { type = "PONG" }
+            local pong = { type = "PONG", silent = data.silent }
             local serialized = self:Serialize(pong)
             if serialized then
                 self:SendCommMessage(PREFIX, serialized, "WHISPER", sender)
@@ -124,10 +132,21 @@ function RunSharing:OnCommReceived(prefix, message, distribution, sender)
             return
         elseif data.type == "PONG" then
             self.connectionStatus = "SUCCESS"
-            print("|cff9580ffTwichUI:|r Connection confirmed! Received response from " .. sender)
+            if not data.silent then
+                print("|cff9580ffTwichUI:|r Connection confirmed! Received response from " .. sender)
+            end
             local ACR = (T.Libs and T.Libs.AceConfigRegistry) or LibStub("AceConfigRegistry-3.0-ElvUI", true) or
                 LibStub("AceConfigRegistry-3.0", true)
             if ACR then ACR:NotifyChange("ElvUI") end
+
+            if self.OnConnectionEstablished then
+                self.OnConnectionEstablished:Invoke(sender)
+            end
+            return
+        elseif data.type == "ACK" then
+            if self.OnRunAcknowledged then
+                self.OnRunAcknowledged:Invoke(data.runId, sender)
+            end
             return
         end
     end
@@ -138,6 +157,13 @@ end
 function RunSharing:ProcessReceivedRun(sender, runData)
     -- Basic validation
     if type(runData) ~= "table" or not runData.id then return end
+
+    -- Send ACK
+    local ack = { type = "ACK", runId = runData.id }
+    local serialized = self:Serialize(ack)
+    if serialized then
+        self:SendCommMessage(PREFIX, serialized, "WHISPER", sender)
+    end
 
     -- Check if we should ignore incoming runs
     if CM:GetProfileSettingSafe("developer.mythicplus.runSharing.ignoreIncoming", false) then

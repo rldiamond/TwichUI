@@ -107,6 +107,21 @@ function DR:Create(order)
                             CM:SetProfileSettingSafe("developer.mythicplus.runLogger.autoShow", value)
                         end,
                     },
+                    historySize = {
+                        type = "range",
+                        name = "History Size",
+                        desc = "Number of runs to keep in history for syncing.",
+                        min = 1,
+                        max = 20,
+                        step = 1,
+                        order = 2.2,
+                        get = function()
+                            return CM:GetProfileSettingSafe("developer.mythicplus.runLogger.historySize", 5)
+                        end,
+                        set = function(_, value)
+                            CM:SetProfileSettingSafe("developer.mythicplus.runLogger.historySize", value)
+                        end,
+                    },
                     runSharingSpacer = CM.Widgets:Spacer(3),
                     runSharingHeader = {
                         type = "header",
