@@ -1,3 +1,9 @@
+### Version 0.04-ALPHA [ December 31 2025 ]
+
+- Added cached syncing with linked players for Mythic+ recordings
+- Added fade effect to the dungeons panel
+- Fixed a bug in the simulato where scrubbing would cause the event count to reset to 0
+
 ### Version 0.03-ALPHA [ December 31 2025 ]
 
 #### Bugfixes
