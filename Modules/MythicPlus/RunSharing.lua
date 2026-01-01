@@ -181,6 +181,18 @@ function RunSharing:ProcessReceivedRun(sender, runData)
 
     Logger.Info("Received Mythic+ run data from " .. sender)
 
+    -- Play notification sound
+    local sound = CM:GetProfileSettingSafe("developer.mythicplus.runSharing.sound", "None")
+    if sound and sound ~= "None" then
+        local LSM = T.Libs and T.Libs.LSM
+        if LSM then
+            local soundFile = LSM:Fetch("sound", sound)
+            if soundFile then
+                _G.PlaySoundFile(soundFile, "Master")
+            end
+        end
+    end
+
     -- Notify UI if available
     if MythicPlusModule.RunSharingFrame and MythicPlusModule.RunSharingFrame.UpdateList then
         MythicPlusModule.RunSharingFrame:UpdateList()

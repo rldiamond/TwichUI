@@ -25,7 +25,7 @@ function CM:CreateWelcomePanel()
                 name = "",
                 order = 1,
                 image = function()
-                    return [[Interface\AddOns\TwichUI\Media\Textures\twich-banner]], 229, 100
+                    return [[Interface\AddOns\TwichUI\Media\Textures\twich-banner]], 250, 65
                 end,
             },
             -- Add a space between the banner and the welcome message

@@ -508,6 +508,41 @@ function MP:Create(order)
                     }
                 }
             },
+
+            -- Run Sharing Settings
+            runSharingGroup = {
+                type = "group",
+                name = "Run Sharing",
+                order = 5,
+                hidden = function() return not CM:GetProfileSettingByConfigEntry(GetModule().CONFIGURATION.ENABLED) end,
+                args = {
+                    description = CM.Widgets:ComponentDescription(0,
+                        "Configure settings for sharing and receiving Mythic+ run data."),
+
+                    notificationGroup = {
+                        type = "group",
+                        name = "Notifications",
+                        inline = true,
+                        order = 1,
+                        args = {
+                            sound = {
+                                type = "select",
+                                dialogControl = "LSM30_Sound",
+                                name = "Notification Sound",
+                                desc = "Play a sound when new run data is received.",
+                                order = 1,
+                                values = LSM and LSM:HashTable("sound") or {},
+                                get = function()
+                                    return CM:GetProfileSettingByConfigEntry(GetModule().CONFIGURATION.RUN_SHARING_SOUND)
+                                end,
+                                set = function(_, value)
+                                    CM:SetProfileSettingByConfigEntry(GetModule().CONFIGURATION.RUN_SHARING_SOUND, value)
+                                end,
+                            },
+                        }
+                    }
+                }
+            },
         }
     )
 end
