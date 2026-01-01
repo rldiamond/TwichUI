@@ -5,5 +5,4 @@
     <Script file="Databases.lua" />
     <Script file="Convenience.lua" />
     <Script file="Testing.lua" />
-    <Script file="MythicPlus.lua" />
 </Ui>

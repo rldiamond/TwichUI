@@ -27,52 +27,6 @@ function DMP:Create(order)
         args = {
             description = CM.Widgets:SubmoduleDescription(
                 "Developer tools and settings for the Mythic+ module."),
-            
-            runSharingGroup = {
-                type = "group",
-                name = "Run Sharing",
-                inline = true,
-                order = 1,
-                args = {
-                    description = CM.Widgets:ComponentDescription(0,
-                        "Configure settings for sharing and receiving Mythic+ run data (Development Feature)."),
-
-                    notificationGroup = {
-                        type = "group",
-                        name = "Notifications",
-                        inline = true,
-                        order = 1,
-                        args = {
-                            sound = {
-                                type = "select",
-                                dialogControl = "LSM30_Sound",
-                                name = "Notification Sound",
-                                desc = "Play a sound when new run data is received.",
-                                order = 1,
-                                values = LSM and LSM:HashTable("sound") or {},
-                                get = function()
-                                    return CM:GetProfileSettingSafe("developer.mythicplus.runSharing.sound", "None")
-                                end,
-                                set = function(_, value)
-                                    CM:SetProfileSettingSafe("developer.mythicplus.runSharing.sound", value)
-                                end,
-                            },
-                            ignoreIncoming = {
-                                type = "toggle",
-                                name = "Ignore Incoming Runs",
-                                desc = "If enabled, incoming run data from other players will be ignored.",
-                                order = 2,
-                                get = function()
-                                    return CM:GetProfileSettingSafe("developer.mythicplus.runSharing.ignoreIncoming", false)
-                                end,
-                                set = function(_, value)
-                                    CM:SetProfileSettingSafe("developer.mythicplus.runSharing.ignoreIncoming", value)
-                                end,
-                            },
-                        }
-                    }
-                }
-            },
         }
     }
 end

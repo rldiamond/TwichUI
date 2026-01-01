@@ -51,7 +51,7 @@ function MP:Create(order)
             -- Main Window Settings
             mainWindowGroup = {
                 type = "group",
-                name = "Main Window",
+                name = TT.Color(CT.TWICH.TERTIARY_ACCENT, "Main Window"),
                 order = 2,
                 hidden = function() return not CM:GetProfileSettingByConfigEntry(GetModule().CONFIGURATION.ENABLED) end,
                 args = {
@@ -273,7 +273,7 @@ function MP:Create(order)
             -- Dungeons Panel Settings
             dungeonsGroup = {
                 type = "group",
-                name = "Dungeons",
+                name = TT.Color(CT.TWICH.TERTIARY_ACCENT, "Dungeons"),
                 order = 3,
                 hidden = function() return not CM:GetProfileSettingByConfigEntry(GetModule().CONFIGURATION.ENABLED) end,
                 args = {
@@ -477,7 +477,7 @@ function MP:Create(order)
             -- Best in Slot Settings
             bestInSlotGroup = {
                 type = "group",
-                name = "Best in Slot",
+                name = TT.Color(CT.TWICH.TERTIARY_ACCENT, "Best in Slot"),
                 order = 4,
                 hidden = function() return not CM:GetProfileSettingByConfigEntry(GetModule().CONFIGURATION.ENABLED) end,
                 args = {
@@ -509,40 +509,7 @@ function MP:Create(order)
                 }
             },
 
-            -- Run Sharing Settings
-            runSharingGroup = {
-                type = "group",
-                name = "Run Sharing",
-                order = 5,
-                hidden = function() return not CM:GetProfileSettingByConfigEntry(GetModule().CONFIGURATION.ENABLED) end,
-                args = {
-                    description = CM.Widgets:ComponentDescription(0,
-                        "Configure settings for sharing and receiving Mythic+ run data."),
 
-                    notificationGroup = {
-                        type = "group",
-                        name = "Notifications",
-                        inline = true,
-                        order = 1,
-                        args = {
-                            sound = {
-                                type = "select",
-                                dialogControl = "LSM30_Sound",
-                                name = "Notification Sound",
-                                desc = "Play a sound when new run data is received.",
-                                order = 1,
-                                values = LSM and LSM:HashTable("sound") or {},
-                                get = function()
-                                    return CM:GetProfileSettingByConfigEntry(GetModule().CONFIGURATION.RUN_SHARING_SOUND)
-                                end,
-                                set = function(_, value)
-                                    CM:SetProfileSettingByConfigEntry(GetModule().CONFIGURATION.RUN_SHARING_SOUND, value)
-                                end,
-                            },
-                        }
-                    }
-                }
-            },
         }
     )
 end

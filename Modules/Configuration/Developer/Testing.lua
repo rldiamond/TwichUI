@@ -266,6 +266,33 @@ function DT:Create(order)
                             }
                         }
                     },
+                    runSimulation = {
+                        type = "group",
+                        inline = true,
+                        name = "Run Simulation",
+                        order = 4,
+                        args = {
+                            description = CM.Widgets:ComponentDescription(1,
+                                "Simulate a recorded run."),
+                            viewReceivedRuns = {
+                                type = "execute",
+                                name = "Open Simulator",
+                                desc = "Open the frame to view and simulate received run logs.",
+                                order = 2,
+                                func = function()
+                                    local ok, mythicPlus = pcall(function() return T:GetModule("MythicPlus") end)
+                                    if not ok or not mythicPlus then return end
+
+                                    local frame = mythicPlus.RunSharingFrame
+                                    if frame and type(frame.Toggle) == "function" then
+                                        frame:Toggle()
+                                    end
+                                end,
+                            },
+                        }
+
+                    },
+
                 },
             },
 

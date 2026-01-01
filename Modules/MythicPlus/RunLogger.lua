@@ -1032,7 +1032,7 @@ function MythicPlusRunLogger:Enable()
         local db = GetDB()
         if db.runHistory and #db.runHistory > 0 then
             if RunSharing and RunSharing.SendPing then
-                RunSharing:SendPing(true)  -- Silent ping
+                RunSharing:SendPing(true) -- Silent ping
             end
         end
     end)

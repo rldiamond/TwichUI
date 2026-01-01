@@ -299,9 +299,15 @@ function RunSharingFrame:CreateFrame()
     self.frame = frame
 
     -- Title
+    local titleIcon = frame:CreateTexture(nil, "OVERLAY")
+    titleIcon:SetPoint("TOPLEFT", 12, -10)
+    titleIcon:SetTexture("Interface\\AddOns\\TwichUI\\Media\\Textures\\simulator.tga")
+    titleIcon:SetSize(24, 24)
+
     local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    title:SetPoint("TOPLEFT", 12, -12)
-    title:SetText("Received Mythic+ Runs")
+    title:SetPoint("LEFT", titleIcon, "RIGHT", 6, 0)
+    title:SetText("Mythic+ Simulator")
+    title:SetTextColor(1, 1, 1)
 
     -- Close Button
     local close = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
@@ -360,6 +366,12 @@ function RunSharingFrame:CreateFrame()
     headerText:SetJustifyH("LEFT")
     self.headerText = headerText
 
+    local headerDateText = detailsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    headerDateText:SetPoint("TOPLEFT", headerText, "BOTTOMLEFT", 0, -2)
+    headerDateText:SetJustifyH("LEFT")
+    headerDateText:SetTextColor(0.7, 0.7, 0.7)
+    self.headerDateText = headerDateText
+
     -- Expand/Collapse All Button
     local expandAllBtn = CreateFrame("Button", nil, detailsFrame, "UIPanelButtonTemplate")
     expandAllBtn:SetSize(100, 20)
@@ -372,7 +384,7 @@ function RunSharingFrame:CreateFrame()
     -- Events List
     local eventsScroll = CreateFrame("ScrollFrame", "TwichUI_RunSharing_EventsScroll", detailsFrame,
         "UIPanelScrollFrameTemplate")
-    eventsScroll:SetPoint("TOPLEFT", headerText, "BOTTOMLEFT", 0, -10)
+    eventsScroll:SetPoint("TOPLEFT", headerDateText, "BOTTOMLEFT", 0, -10)
     eventsScroll:SetPoint("BOTTOMRIGHT", detailsFrame, "BOTTOMRIGHT", -25, 0)
     if Skins and eventsScroll.ScrollBar then Skins:HandleScrollBar(eventsScroll.ScrollBar) end
     self.eventsScroll = eventsScroll
@@ -926,12 +938,22 @@ function RunSharingFrame:UpdateList()
         if not row then
             row = CreateFrame("Button", nil, self.listContent)
             row:SetSize(250, ROW_HEIGHT)
-            row:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight")
+
+            local bg = row:CreateTexture(nil, "BACKGROUND")
+            bg:SetAllPoints()
+            row.bg = bg
+
+            local highlight = row:CreateTexture(nil, "BACKGROUND")
+            highlight:SetAllPoints()
+            highlight:SetColorTexture(1, 1, 1, 0.10)
+            highlight:Hide()
+            row.highlight = highlight
 
             local text = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
             text:SetPoint("LEFT", 5, 0)
             text:SetPoint("RIGHT", -45, 0)
             text:SetJustifyH("LEFT")
+            text:SetTextColor(1, 1, 1)
             row.text = text
 
             -- Delete Button (Red X)
@@ -967,12 +989,14 @@ function RunSharingFrame:UpdateList()
             row:SetScript("OnEnter", function(self)
                 self.delBtn:Show()
                 self.renameBtn:Show()
+                if self.highlight then self.highlight:Show() end
             end)
             row:SetScript("OnLeave", function(self)
                 if not self:IsMouseOver() then
                     self.delBtn:Hide()
                     self.renameBtn:Hide()
                 end
+                if self.highlight then self.highlight:Hide() end
             end)
 
             row:SetScript("OnClick", function() self:SelectRun(i) end)
@@ -986,6 +1010,12 @@ function RunSharingFrame:UpdateList()
         row:SetPoint("TOPLEFT", 0, -yOffset)
         row:Show()
 
+        if row.bg then
+            -- Alternating grey striping, similar to the event list rows.
+            local a = (i % 2 == 0) and 0.06 or 0.03
+            row.bg:SetColorTexture(1, 1, 1, a)
+        end
+
         local dateStr = date("%m/%d %H:%M", run.receivedAt)
         local sender = run.sender or "Unknown"
         local dungeon = run.data and run.data.dungeonName or "Unknown"
@@ -995,6 +1025,10 @@ function RunSharingFrame:UpdateList()
             row.text:SetText(run.customName)
         else
             row.text:SetText(string.format("%s: +%s %s (%s)", dateStr, level, dungeon, sender))
+        end
+
+        if row.text then
+            row.text:SetTextColor(1, 1, 1)
         end
 
         yOffset = yOffset + ROW_HEIGHT
@@ -1028,6 +1062,7 @@ function RunSharingFrame:UpdateDetailsView()
         self.detailsScroll:Hide()
         self.detailsFrame:Hide()
         self.headerText:SetText("")
+        if self.headerDateText then self.headerDateText:SetText("") end
         if self.progressBar then self.progressBar:Hide() end
         if self.timeText then self.timeText:SetText("") end
         if self.eventText then self.eventText:SetText("") end
@@ -1063,9 +1098,12 @@ function RunSharingFrame:UpdateDetailsView()
         end
 
         local level = d.level or "?"
-        local dateStr = date("%Y-%m-%d %H:%M", run.receivedAt)
+        local dateStr = date("%m/%d/%Y", run.receivedAt)
         self.headerText:SetFontObject("GameFontNormalHuge")
-        self.headerText:SetText(string.format("%s +%s\n|cffaaaaaa%s|r", dungeon, level, dateStr))
+        self.headerText:SetText(string.format("%s +%s", dungeon, level))
+        if self.headerDateText then
+            self.headerDateText:SetText(dateStr)
+        end
 
         -- Events List
         self:UpdateEventsList(run.data.events)

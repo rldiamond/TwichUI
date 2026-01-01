@@ -10,11 +10,15 @@ MM.Sound = SM
 local LSM = LibStub("LibSharedMedia-3.0")
 
 SM.SOUNDS = {
-    { name = "Game-Ping",    extension = "mp3" },
-    { name = "Game-Success", extension = "mp3" },
-    { name = "Ping",         extension = "mp3" },
-    { name = "Notable-Loot", extension = "mp3" },
-    { name = "Game-Error",   extension = "mp3" },
+    { name = "Game-Ping",                    extension = "mp3" },
+    { name = "Game-Success",                 extension = "mp3" },
+    { name = "Ping",                         extension = "mp3" },
+    { name = "Notable-Loot",                 extension = "mp3" },
+    { name = "Game-Error",                   extension = "mp3" },
+    { name = "TwichUI-Green-Dude-Gets-Loot", extension = "mp3" },
+    { name = "TwichUI-Notification-1",       extension = "mp3" },
+    { name = "TwichUI-Notification-2",       extension = "mp3" },
+    { name = "TwichUI-Notification-3",       extension = "mp3" },
 }
 
 local MEDIA_ROOT = "Interface\\AddOns\\TwichUI\\Media\\"

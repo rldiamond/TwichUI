@@ -44,7 +44,6 @@ function CM:CreateDeveloperConfiguration()
             convenienceGroup = CM.Developer.Convenience:Create(7),
             recordingGroup = CM.Developer.Recording:Create(8),
             testingGroup = CM.Developer.Testing:Create(9),
-            mythicPlusGroup = CM.Developer.MythicPlus:Create(9.5),
             loggerGroup = CM.Developer.Logger:Create(10),
         }
 
