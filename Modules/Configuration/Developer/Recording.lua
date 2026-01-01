@@ -227,7 +227,7 @@ function DR:Create(order)
                             local ok, mythicPlus = pcall(function() return T:GetModule("MythicPlus") end)
                             if not ok or not mythicPlus or not mythicPlus.RunSharing or not mythicPlus.RunLogger then return true end
                             return not mythicPlus.RunSharing.receiver or not mythicPlus.RunLogger.GetLastRun or
-                            not mythicPlus.RunLogger:GetLastRun()
+                                not mythicPlus.RunLogger:GetLastRun()
                         end,
                         func = function()
                             local ok, mythicPlus = pcall(function() return T:GetModule("MythicPlus") end)
@@ -237,7 +237,7 @@ function DR:Create(order)
                             if lastRun then
                                 mythicPlus.RunSharing:SendRun(lastRun)
                                 print("|cff9580ffTwichUI:|r Manually sent last run to " .. mythicPlus.RunSharing
-                                .receiver)
+                                    .receiver)
                             end
                         end,
                     },

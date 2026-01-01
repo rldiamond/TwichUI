@@ -266,49 +266,6 @@ function DT:Create(order)
                             }
                         }
                     },
-                    recordingSimulator = {
-                        type = "group",
-                        inline = true,
-                        name = "Simulate a Recording",
-                        order = 4,
-                        args = {
-                            simulatorSpeed = {
-                                type = "range",
-                                name = "Simulator Playback Speed",
-                                desc = "Speed multiplier for replaying exported run logs (higher = faster).",
-                                order = 1.5,
-                                min = 0.1,
-                                max = 50,
-                                step = 0.1,
-                                bigStep = 1,
-                                get = function()
-                                    return CM:GetProfileSettingSafe("developer.mythicplus.simulator.playbackSpeed", 10)
-                                end,
-                                set = function(_, value)
-                                    CM:SetProfileSettingSafe("developer.mythicplus.simulator.playbackSpeed", value)
-                                end,
-                            },
-                            openSimulator = {
-                                type = "execute",
-                                name = "Open Simulator",
-                                desc = "Paste an exported JSON run log to replay it through the Mythic+ event pipeline.",
-                                order = 1.6,
-                                func = function()
-                                    local ok, mythicPlus = pcall(function() return T:GetModule("MythicPlus") end)
-                                    if not ok or not mythicPlus or not mythicPlus.Simulator then
-                                        return
-                                    end
-                                    if type(mythicPlus.Simulator.Initialize) == "function" then
-                                        mythicPlus.Simulator:Initialize()
-                                    end
-                                    if type(mythicPlus.Simulator.ToggleFrame) == "function" then
-                                        mythicPlus.Simulator:ToggleFrame()
-                                    end
-                                end,
-                            },
-
-                        }
-                    },
                 },
             },
 

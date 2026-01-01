@@ -267,7 +267,7 @@ end
 
 function RunSharingFrame:CreateFrame()
     local frame = CreateFrame("Frame", "TwichUI_RunSharingFrame", UIParent, "BackdropTemplate")
-    frame:SetSize(800, 500)
+    frame:SetSize(800, 550)
     frame:SetPoint("CENTER")
     frame:SetFrameStrata("DIALOG")
     frame:Hide()
@@ -311,7 +311,7 @@ function RunSharingFrame:CreateFrame()
     -- List ScrollFrame
     local listScroll = CreateFrame("ScrollFrame", "TwichUI_RunSharing_ListScroll", frame, "UIPanelScrollFrameTemplate")
     listScroll:SetPoint("TOPLEFT", frame, "TOPLEFT", 12, -50)
-    listScroll:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 12, 50)
+    listScroll:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 12, 100) -- Raised to make room for progress bar
     listScroll:SetWidth(250)
     if Skins and listScroll.ScrollBar then Skins:HandleScrollBar(listScroll.ScrollBar) end
 
@@ -332,9 +332,9 @@ function RunSharingFrame:CreateFrame()
     local detailsScroll = CreateFrame("ScrollFrame", "TwichUI_RunSharing_DetailsScroll", frame,
         "UIPanelScrollFrameTemplate")
     detailsScroll:SetPoint("TOPLEFT", sep, "TOPRIGHT", 5, 0)
-    detailsScroll:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -30, 80) -- Raised bottom to make room for slider
+    detailsScroll:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -30, 100) -- Raised bottom to make room for slider
     if Skins and detailsScroll.ScrollBar then Skins:HandleScrollBar(detailsScroll.ScrollBar) end
-    detailsScroll:Hide()                                                 -- Hidden by default
+    detailsScroll:Hide()                                                  -- Hidden by default
     self.detailsScroll = detailsScroll
 
     local detailsEditBox = CreateFrame("EditBox", nil, detailsScroll)
@@ -351,7 +351,7 @@ function RunSharingFrame:CreateFrame()
     -- Formatted Details View
     local detailsFrame = CreateFrame("Frame", nil, frame)
     detailsFrame:SetPoint("TOPLEFT", sep, "TOPRIGHT", 5, 0)
-    detailsFrame:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -10, 80)
+    detailsFrame:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -10, 100)
     self.detailsFrame = detailsFrame
 
     -- Header Info
@@ -359,6 +359,15 @@ function RunSharingFrame:CreateFrame()
     headerText:SetPoint("TOPLEFT", 0, 0)
     headerText:SetJustifyH("LEFT")
     self.headerText = headerText
+
+    -- Expand/Collapse All Button
+    local expandAllBtn = CreateFrame("Button", nil, detailsFrame, "UIPanelButtonTemplate")
+    expandAllBtn:SetSize(100, 20)
+    expandAllBtn:SetPoint("TOPRIGHT", detailsFrame, "TOPRIGHT", -25, 0)
+    expandAllBtn:SetText("Expand All")
+    expandAllBtn:SetScript("OnClick", function() self:ToggleAllEvents() end)
+    if Skins then Skins:HandleButton(expandAllBtn) end
+    self.expandAllBtn = expandAllBtn
 
     -- Events List
     local eventsScroll = CreateFrame("ScrollFrame", "TwichUI_RunSharing_EventsScroll", detailsFrame,
@@ -428,8 +437,15 @@ function RunSharingFrame:CreateFrame()
     speedInput:SetJustifyH("CENTER")
     speedInput:SetScript("OnEnterPressed", function(self)
         local val = tonumber(self:GetText())
-        if val and val > 0 then
+        if val then
+            if val > 50 then
+                val = 50
+                print("TwichUI: Simulator speed capped at 50x.")
+            end
+            if val < 0.1 then val = 0.1 end
+
             CM:SetProfileSettingSafe("developer.mythicplus.simulator.playbackSpeed", val)
+            self:SetText(tostring(val))
             self:ClearFocus()
         else
             self:SetText(CM:GetProfileSettingSafe("developer.mythicplus.simulator.playbackSpeed", 10))
@@ -464,7 +480,322 @@ function RunSharingFrame:CreateFrame()
     if Skins then Skins:HandleButton(importBtn) end
     self.importBtn = importBtn
 
+    -- Progress Bar
+    local progressBar = CreateFrame("StatusBar", nil, frame)
+    progressBar:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 12, 60)
+    progressBar:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -12, 60)
+    progressBar:SetHeight(24)
+    progressBar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
+    progressBar:GetStatusBarTexture():SetHorizTile(false)
+    progressBar:SetMinMaxValues(0, 100)
+    progressBar:SetValue(0)
+    progressBar:Hide()
+
+    if Skins then
+        Skins:HandleStatusBar(progressBar)
+    else
+        progressBar:SetBackdrop({
+            bgFile = "Interface/Tooltips/UI-Tooltip-Background",
+            edgeFile = "Interface/Tooltips/UI-Tooltip-Border",
+            tile = true,
+            tileSize = 16,
+            edgeSize = 16,
+            insets = { left = 4, right = 4, top = 4, bottom = 4 },
+        })
+        progressBar:SetBackdropColor(0, 0, 0, 0.5)
+    end
+
+    -- Set color after skinning to ensure it takes effect
+    progressBar:SetStatusBarColor(0.2, 0.6, 1.0) -- Bright Blue
+
+    local timeText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    timeText:SetPoint("BOTTOM", frame, "BOTTOM", 60, 18)
+    timeText:SetTextColor(0.2, 0.6, 1.0)
+    timeText:SetText("")
+    self.timeText = timeText
+
+    local eventText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    eventText:SetPoint("BOTTOM", frame, "BOTTOM", -60, 18)
+    eventText:SetTextColor(0.2, 0.6, 1.0)
+    eventText:SetText("")
+    self.eventText = eventText
+
+    self.progressBar = progressBar
+
+    -- Register Simulator Callbacks
+    if Simulator and Simulator.RegisterCallback then
+        Simulator:RegisterCallback("RunSharingFrame_Progress", function(event, ...)
+            if event == "SIMULATOR_STARTED" then
+                local totalEvents, maxDuration, events, startedAt, speed = ...
+                self:StartProgressAnimation(maxDuration, startedAt, speed, events)
+                self:UpdateSimButtons(true, false)
+                if self.eventText then
+                    self.eventText:SetText(string.format("Event: 1 / %d", totalEvents))
+                end
+            elseif event == "SIMULATOR_PROGRESS" then
+                local current, total = ...
+                if self.eventText then
+                    self.eventText:SetText(string.format("Event: %d / %d", current, total))
+                end
+            elseif event == "SIMULATOR_PAUSED" then
+                self:StopProgressAnimation(true) -- Stop the OnUpdate loop
+                self:UpdateSimButtons(true, true)
+            elseif event == "SIMULATOR_RESUMED" then
+                local maxDuration, startedAt, speed, events = ...
+                self:StartProgressAnimation(maxDuration, startedAt, speed, events)
+                self:UpdateSimButtons(true, false)
+            elseif event == "SIMULATOR_STOPPED" then
+                self:StopProgressAnimation()
+                self:UpdateSimButtons(false, false)
+            end
+        end)
+    end
+
     self.rows = {}
+end
+
+function RunSharingFrame:UpdateSimButtons(isSimulating, isPaused)
+    if not self.simBtn or not self.stopBtn then return end
+
+    self.isSimulating = isSimulating
+    self.isPaused = isPaused
+
+    if isSimulating then
+        -- Playing or Paused
+        self.simBtn:SetEnabled(true)
+        self.simBtn:SetAlpha(1.0)
+
+        if isPaused then
+            self.simBtn:SetNormalTexture("Interface\\AddOns\\TwichUI\\Media\\Textures\\play-button.tga")
+            if self.simBtn.SetHighlightTexture then
+                self.simBtn:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight", "ADD")
+            end
+        else
+            self.simBtn:SetNormalTexture("Interface\\AddOns\\TwichUI\\Media\\Textures\\pause-button.tga")
+            if self.simBtn.SetHighlightTexture then
+                self.simBtn:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight", "ADD")
+            end
+        end
+
+        self.stopBtn:SetEnabled(true)
+        self.stopBtn:SetAlpha(1.0)
+    else
+        -- Stopped
+        self.simBtn:SetEnabled(true)
+        self.simBtn:SetAlpha(1.0)
+        self.simBtn:SetNormalTexture("Interface\\AddOns\\TwichUI\\Media\\Textures\\play-button.tga")
+
+        self.stopBtn:SetEnabled(false)
+        self.stopBtn:SetAlpha(0.5)
+    end
+end
+
+function RunSharingFrame:SetupProgressBar(events)
+    if not events then return end
+
+    -- Calculate max duration
+    local maxDuration = 0
+    if #events > 0 then
+        local last = events[#events]
+        maxDuration = last.relSeconds or last.rel or 0
+    end
+
+    self.progressBar:SetMinMaxValues(0, maxDuration)
+    self.progressBar:SetValue(0)
+    self.progressBar:Show()
+
+    local tm = math.floor(maxDuration / 60)
+    local ts = math.floor(maxDuration % 60)
+    if self.timeText then
+        self.timeText:SetText(string.format("00:00 / %02d:%02d", tm, ts))
+    end
+    if self.eventText then
+        self.eventText:SetText(string.format("Event: 0 / %d", #events))
+    end
+
+    -- Create markers
+    self.progressBar.markers = self.progressBar.markers or {}
+    for _, m in ipairs(self.progressBar.markers) do m:Hide() end
+
+    if maxDuration > 0 then
+        for i, ev in ipairs(events) do
+            local rel = ev.relSeconds or ev.rel or 0
+            if rel > 0 then
+                local marker = self.progressBar.markers[i]
+                if not marker then
+                    marker = CreateFrame("Frame", nil, self.progressBar)
+                    marker:SetSize(4, self.progressBar:GetHeight()) -- Match bar height
+
+                    local tex = marker:CreateTexture(nil, "OVERLAY")
+                    tex:SetColorTexture(1, 1, 1, 0.5)
+                    tex:SetWidth(1)
+                    tex:SetPoint("TOP")
+                    tex:SetPoint("BOTTOM")
+                    tex:SetPoint("CENTER")
+                    marker.tex = tex
+
+                    marker:SetScript("OnEnter", function(self)
+                        if not self.eventData then return end
+                        GameTooltip:SetOwner(self, "ANCHOR_TOP")
+                        local name = self.eventData.name or "Event"
+                        local r = self.eventData.relSeconds or self.eventData.rel or 0
+                        local m = math.floor(r / 60)
+                        local s = math.floor(r % 60)
+                        GameTooltip:SetText(string.format("%s (%02d:%02d)", name, m, s))
+
+                        if self.eventData.payload then
+                            local json = EncodeJSON(self.eventData.payload)
+                            if #json > 100 then json = json:sub(1, 97) .. "..." end
+                            GameTooltip:AddLine(json, 0.8, 0.8, 0.8, true)
+                        end
+                        GameTooltip:Show()
+                        self.tex:SetColorTexture(1, 1, 1, 1) -- Highlight marker
+
+                        -- Highlight corresponding row
+                        if self.eventIndex and RunSharingFrame.eventRows and RunSharingFrame.eventRows[self.eventIndex] then
+                            local row = RunSharingFrame.eventRows[self.eventIndex]
+                            if row.highlight then row.highlight:Show() end
+                        end
+                    end)
+
+                    marker:SetScript("OnLeave", function(self)
+                        GameTooltip:Hide()
+                        self.tex:SetColorTexture(1, 1, 1, 0.5) -- Unhighlight marker
+
+                        -- Unhighlight corresponding row
+                        if self.eventIndex and RunSharingFrame.eventRows and RunSharingFrame.eventRows[self.eventIndex] then
+                            local row = RunSharingFrame.eventRows[self.eventIndex]
+                            -- Only hide if not expanded
+                            if row.highlight and not (RunSharingFrame.expandedRows and RunSharingFrame.expandedRows[self.eventIndex]) then
+                                row.highlight:Hide()
+                            end
+                        end
+                    end)
+
+                    marker:SetScript("OnMouseDown", function(self)
+                        if not self.eventIndex then return end
+
+                        -- Ensure expanded
+                        if not RunSharingFrame.expandedRows[self.eventIndex] then
+                            RunSharingFrame:ToggleEventDetails(self.eventIndex)
+                        end
+
+                        -- Scroll to row
+                        local row = RunSharingFrame.eventRows[self.eventIndex]
+                        if row then
+                            -- Calculate position
+                            -- The row is positioned relative to eventsContent
+                            -- We need to convert that to a scroll value
+                            -- row:GetTop() is screen coordinate.
+                            -- eventsContent:GetTop() is screen coordinate of the top of the content.
+                            -- The difference is the offset.
+
+                            -- However, since we just toggled, layout might be pending?
+                            -- UpdateEventsList is synchronous, so layout should be done.
+
+                            local contentTop = RunSharingFrame.eventsContent:GetTop()
+                            local rowTop = row:GetTop()
+
+                            if contentTop and rowTop then
+                                local offset = contentTop - rowTop
+                                -- ScrollFrame scrolls by offset from top
+                                RunSharingFrame.eventsScroll:SetVerticalScroll(offset)
+                            end
+                        end
+                    end)
+
+                    self.progressBar.markers[i] = marker
+                end
+
+                marker.eventData = ev
+                marker.eventIndex = i
+                local pct = rel / maxDuration
+                marker:ClearAllPoints()
+                marker:SetPoint("CENTER", self.progressBar, "LEFT", self.progressBar:GetWidth() * pct, 0)
+                marker:Show()
+            end
+        end
+    end
+end
+
+function RunSharingFrame:StartProgressAnimation(maxDuration, startedAt, speed, events)
+    -- Ensure setup is correct (in case we started without selecting first, though unlikely)
+    self:SetupProgressBar(events)
+
+    local frameObj = self
+    local nextEventIndex = 1
+
+    self.progressBar:SetScript("OnUpdate", function(self, elapsed)
+        local now = GetTime()
+        local virtualTime = (now - startedAt) * speed
+        if virtualTime > maxDuration then virtualTime = maxDuration end
+
+        self:SetValue(virtualTime)
+
+        local m = math.floor(virtualTime / 60)
+        local s = math.floor(virtualTime % 60)
+        local tm = math.floor(maxDuration / 60)
+        local ts = math.floor(maxDuration % 60)
+        if frameObj.timeText then
+            frameObj.timeText:SetText(string.format("%02d:%02d / %02d:%02d", m, s, tm, ts))
+        end
+
+        -- Highlight last event
+        if events then
+            while nextEventIndex <= #events do
+                local ev = events[nextEventIndex]
+                local rel = ev.relSeconds or ev.rel or 0
+                if rel > virtualTime then
+                    break
+                end
+                nextEventIndex = nextEventIndex + 1
+            end
+
+            if nextEventIndex > 1 then
+                frameObj:HighlightPlayingRow(nextEventIndex - 1)
+            end
+        end
+    end)
+end
+
+function RunSharingFrame:HighlightPlayingRow(index)
+    if self.lastPlayingIndex == index then return end
+
+    -- Unhighlight previous
+    if self.lastPlayingIndex and self.eventRows[self.lastPlayingIndex] then
+        local row = self.eventRows[self.lastPlayingIndex]
+        if row.playingHighlight then row.playingHighlight:Hide() end
+    end
+
+    -- Highlight new
+    if index and self.eventRows[index] then
+        local row = self.eventRows[index]
+        if row.playingHighlight then row.playingHighlight:Show() end
+
+        -- Auto-scroll to keep playing row in view?
+        -- Maybe too jarring if user is scrolling manually.
+        -- Let's stick to just highlighting for now.
+    end
+
+    self.lastPlayingIndex = index
+end
+
+function RunSharingFrame:StopProgressAnimation(keepHighlight)
+    self.progressBar:SetScript("OnUpdate", nil)
+
+    if not keepHighlight then
+        -- Clear playing highlight
+        if self.lastPlayingIndex and self.eventRows[self.lastPlayingIndex] then
+            local row = self.eventRows[self.lastPlayingIndex]
+            if row.playingHighlight then row.playingHighlight:Hide() end
+        end
+        self.lastPlayingIndex = nil
+    end
+
+    -- Do NOT hide the progress bar
+    if self.progressBar.markers then
+        -- Keep markers visible
+    end
 end
 
 function RunSharingFrame:UpdateSpeedInput()
@@ -652,8 +983,23 @@ function RunSharingFrame:UpdateDetailsView()
         self.detailsScroll:Hide()
         self.detailsFrame:Hide()
         self.headerText:SetText("")
+        if self.progressBar then self.progressBar:Hide() end
+        if self.timeText then self.timeText:SetText("") end
+        if self.eventText then self.eventText:SetText("") end
+        self:UpdateSimButtons(false)
         return
     end
+
+    -- Reset buttons state
+    self:UpdateSimButtons(false)
+
+    -- Reset expansion state
+    self.expandedRows = {}
+    self.allExpanded = false
+    if self.expandAllBtn then self.expandAllBtn:SetText("Expand All") end
+
+    -- Setup Progress Bar for this run
+    self:SetupProgressBar(run.data.events)
 
     if self.viewMode == "json" then
         self.detailsFrame:Hide()
@@ -693,25 +1039,33 @@ function RunSharingFrame:UpdateEventsList(events)
     local FRIENDLY_NAMES = {
         CHALLENGE_MODE_START = "Key Start",
         CHALLENGE_MODE_COMPLETED = "Key Completed",
+        CHALLENGE_MODE_COMPLETED_REWARDS = "Key Rewards",
         CHALLENGE_MODE_RESET = "Key Reset",
+        CHALLENGE_MODE_DEATH_COUNT_UPDATED = "Death Count",
+        TWICH_DUNGEON_START = "Dungeon Start",
         ENCOUNTER_START = "Boss Start",
         ENCOUNTER_END = "Boss End",
         CHAT_MSG_LOOT = "Loot",
         PLAYER_DEAD = "Player Death",
         GROUP_ROSTER_UPDATE = "Roster Update",
         GROUP_ROSTER_SNAPSHOT = "Roster Snapshot",
+        PLAYER_ENTERING_WORLD = "Zone In/Reload",
     }
 
     local EVENT_COLORS = {
-        CHALLENGE_MODE_START = "|cff4caf50",     -- Green
-        CHALLENGE_MODE_COMPLETED = "|cff4caf50", -- Green
-        CHALLENGE_MODE_RESET = "|cfff44336",     -- Red
-        ENCOUNTER_START = "|cffffc107",          -- Amber
-        ENCOUNTER_END = "|cffffc107",            -- Amber
-        CHAT_MSG_LOOT = "|cff9c27b0",            -- Purple
-        PLAYER_DEAD = "|cfff44336",              -- Red
-        GROUP_ROSTER_UPDATE = "|cff9e9e9e",      -- Grey
-        GROUP_ROSTER_SNAPSHOT = "|cff9e9e9e",    -- Grey
+        CHALLENGE_MODE_START = "|cff4caf50",               -- Green
+        CHALLENGE_MODE_COMPLETED = "|cff4caf50",           -- Green
+        CHALLENGE_MODE_COMPLETED_REWARDS = "|cffffd700",   -- Gold
+        CHALLENGE_MODE_RESET = "|cfff44336",               -- Red
+        CHALLENGE_MODE_DEATH_COUNT_UPDATED = "|cfff44336", -- Red
+        TWICH_DUNGEON_START = "|cff4caf50",                -- Green
+        ENCOUNTER_START = "|cffffc107",                    -- Amber
+        ENCOUNTER_END = "|cffffc107",                      -- Amber
+        CHAT_MSG_LOOT = "|cff9c27b0",                      -- Purple
+        PLAYER_DEAD = "|cfff44336",                        -- Red
+        GROUP_ROSTER_UPDATE = "|cff9e9e9e",                -- Grey
+        GROUP_ROSTER_SNAPSHOT = "|cff9e9e9e",              -- Grey
+        PLAYER_ENTERING_WORLD = "|cff00bcd4",              -- Cyan
     }
 
     self.expandedRows = self.expandedRows or {}
@@ -728,6 +1082,20 @@ function RunSharingFrame:UpdateEventsList(events)
             bg:SetColorTexture(1, 1, 1, 0.05)
             bg:Hide()
             row.bg = bg
+
+            -- Highlight Texture
+            local highlight = row:CreateTexture(nil, "BACKGROUND")
+            highlight:SetAllPoints()
+            highlight:SetColorTexture(0.2, 0.6, 1.0, 0.6) -- Blue highlight (increased opacity)
+            highlight:Hide()
+            row.highlight = highlight
+
+            -- Playing Highlight Texture
+            local playingHighlight = row:CreateTexture(nil, "BACKGROUND")
+            playingHighlight:SetAllPoints()
+            playingHighlight:SetColorTexture(1.0, 0.8, 0.0, 0.2) -- Amber/Gold, lower opacity
+            playingHighlight:Hide()
+            row.playingHighlight = playingHighlight
 
             -- Expand Button (Skinnable)
             local expandBtn = CreateFrame("Button", nil, row)
@@ -759,27 +1127,45 @@ function RunSharingFrame:UpdateEventsList(events)
             row.nameText = nameText
 
             local playBtn = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
-            playBtn:SetSize(40, 20)
+            playBtn:SetSize(70, 20)
             playBtn:SetPoint("TOPRIGHT", -5, -(ROW_HEIGHT - 20) / 2)
-            playBtn:SetText("Play")
+            playBtn:SetText("Simulate")
             if Skins then Skins:HandleButton(playBtn) end
             row.playBtn = playBtn
 
             row:SetScript("OnClick", function() self:ToggleEventDetails(i) end)
 
-            row:SetScript("OnEnter", function(self)
-                GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-                if self.eventData then
-                    GameTooltip:AddLine(self.eventData.name or "Event", 1, 1, 1)
-                    if self.eventData.payload then
-                        local json = EncodeJSON(self.eventData.payload)
+            row:SetScript("OnEnter", function(btn)
+                GameTooltip:SetOwner(btn, "ANCHOR_RIGHT")
+                if btn.eventData then
+                    GameTooltip:AddLine(btn.eventData.name or "Event", 1, 1, 1)
+                    if btn.eventData.payload then
+                        local json = EncodeJSON(btn.eventData.payload)
                         if #json > 300 then json = json:sub(1, 297) .. "..." end
                         GameTooltip:AddLine(json, 0.8, 0.8, 0.8, true)
                     end
                     GameTooltip:Show()
                 end
+
+                -- Highlight marker
+                if btn.eventIndex and self.progressBar and self.progressBar.markers then
+                    local marker = self.progressBar.markers[btn.eventIndex]
+                    if marker and marker.tex then
+                        marker.tex:SetColorTexture(1, 1, 1, 1)
+                    end
+                end
             end)
-            row:SetScript("OnLeave", function(self) GameTooltip:Hide() end)
+            row:SetScript("OnLeave", function(btn)
+                GameTooltip:Hide()
+
+                -- Unhighlight marker
+                if btn.eventIndex and self.progressBar and self.progressBar.markers then
+                    local marker = self.progressBar.markers[btn.eventIndex]
+                    if marker and marker.tex then
+                        marker.tex:SetColorTexture(1, 1, 1, 0.5)
+                    end
+                end
+            end)
 
             self.eventRows[i] = row
         end
@@ -787,6 +1173,7 @@ function RunSharingFrame:UpdateEventsList(events)
         row:SetPoint("TOPLEFT", 0, -yOffset)
         row:Show()
         row.eventData = ev
+        row.eventIndex = i
 
         -- Striping
         if i % 2 == 0 then
@@ -812,6 +1199,12 @@ function RunSharingFrame:UpdateEventsList(events)
 
         -- Expansion Logic
         local isExpanded = self.expandedRows[i]
+
+        if isExpanded then
+            row.highlight:Show()
+        else
+            row.highlight:Hide()
+        end
 
         if Skins then
             row.expandBtn.text:SetText(isExpanded and "-" or "+")
@@ -861,6 +1254,22 @@ function RunSharingFrame:ToggleEventDetails(index)
     if run and run.data then
         self:UpdateEventsList(run.data.events)
     end
+end
+
+function RunSharingFrame:ToggleAllEvents()
+    local db = self:GetDB()
+    local run = self.selectedIndex and db.remoteRuns[self.selectedIndex]
+    if not run or not run.data or not run.data.events then return end
+
+    self.allExpanded = not self.allExpanded
+    self.expandedRows = self.expandedRows or {}
+
+    for i = 1, #run.data.events do
+        self.expandedRows[i] = self.allExpanded
+    end
+
+    self.expandAllBtn:SetText(self.allExpanded and "Collapse All" or "Expand All")
+    self:UpdateEventsList(run.data.events)
 end
 
 function RunSharingFrame:PopulateEventDetails(container, payload)
@@ -980,13 +1389,31 @@ function RunSharingFrame:PopulateEventDetails(container, payload)
 end
 
 function RunSharingFrame:OnSimulateClick()
+    if self.isSimulating then
+        if self.isPaused then
+            if Simulator and Simulator.ResumeSimulation then
+                Simulator:ResumeSimulation()
+            end
+        else
+            if Simulator and Simulator.PauseSimulation then
+                Simulator:PauseSimulation()
+            end
+        end
+        return
+    end
+
     if not self.selectedIndex then return end
     local db = self:GetDB()
     local run = db.remoteRuns[self.selectedIndex]
 
     if run and run.data then
+        local speed = 10
+        if self.speedInput then
+            speed = tonumber(self.speedInput:GetText()) or 10
+        end
+
         if Simulator and Simulator.StartSimulationFromData then
-            Simulator:StartSimulationFromData(run.data)
+            Simulator:StartSimulationFromData(run.data, { speed = speed })
         elseif Simulator and Simulator.StartSimulationFromJSON then
             -- Fallback if we can convert to JSON, but we can't easily.
             -- We should add StartSimulationFromData to Simulator.lua
@@ -1010,10 +1437,10 @@ end
 function RunSharingFrame:PerformDelete()
     local index = self.runToDeleteIndex or self.selectedIndex
     if not index then return end
-    
+
     local db = self:GetDB()
     tremove(db.remoteRuns, index)
-    
+
     if self.selectedIndex == index then
         self.selectedIndex = nil
         self.detailsEditBox:SetText("")
@@ -1023,7 +1450,7 @@ function RunSharingFrame:PerformDelete()
     elseif self.selectedIndex and self.selectedIndex > index then
         self.selectedIndex = self.selectedIndex - 1
     end
-    
+
     self.runToDeleteIndex = nil
     self:UpdateList()
 end
@@ -1035,6 +1462,9 @@ function RunSharingFrame:OnClearAllClick()
     self.detailsEditBox:SetText("")
     self.detailsScroll:Hide()
     self.detailsFrame:Hide()
+    if self.progressBar then self.progressBar:Hide() end
+    if self.timeText then self.timeText:SetText("") end
+    if self.eventText then self.eventText:SetText("") end
     self.headerText:SetText("")
     self:UpdateList()
 end
@@ -1201,8 +1631,8 @@ function RunSharingFrame:ShowRenameDialog()
     cancelBtn:SetSize(80, 24)
     cancelBtn:SetPoint("RIGHT", saveBtn, "LEFT", -10, 0)
     cancelBtn:SetText("Cancel")
-    cancelBtn:SetScript("OnClick", function() 
-        frame:Hide() 
+    cancelBtn:SetScript("OnClick", function()
+        frame:Hide()
         self.runToRenameIndex = nil
     end)
     if Skins then Skins:HandleButton(cancelBtn) end

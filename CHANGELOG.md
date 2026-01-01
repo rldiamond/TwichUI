@@ -14,8 +14,10 @@
 - Added the ability to stream recorded mythic+ runs to another player
 - Added configuration to setup and test addon comms between players
 - Added configuration to prevent the export dialog from automatically appearing after the completion of a dungeon
+- Added configuration to ignore incomming Mythic+ recorder data
 - Added a frame to view received runs, inspect events, and simulate the run
 - Added ability to import raw JSON exported from runs into the database
+- Added ability to pause the Mythic+ simulator
 
 ### Version 0.02-ALPHA [ December 31 2025 ]
 

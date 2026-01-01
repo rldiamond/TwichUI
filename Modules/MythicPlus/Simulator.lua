@@ -10,15 +10,8 @@
 local T = unpack(Twich)
 
 local _G = _G
-local CreateFrame = _G.CreateFrame
-local UIParent = _G.UIParent
 local GetTime = _G.GetTime
 local C_Timer = _G.C_Timer
-
--- Optional ElvUI integration for skinned buttons, etc.
----@diagnostic disable-next-line: undefined-field
-local E = _G.ElvUI and _G.ElvUI[1]
-local Skins = E and E.GetModule and E:GetModule("Skins", true)
 
 ---@type MythicPlusModule
 local MythicPlusModule = T:GetModule("MythicPlus")
@@ -31,6 +24,7 @@ local MythicPlusModule = T:GetModule("MythicPlus")
 ---@field _simToken number|nil
 ---@field _simState table|nil
 ---@field _restoreRunLoggerEnabled boolean|nil
+---@field _callbacks table<string, fun(event:string, ...)>|nil
 local Sim = MythicPlusModule.Simulator or {}
 MythicPlusModule.Simulator = Sim
 
@@ -41,8 +35,27 @@ local Tools = T:GetModule("Tools")
 ---@type ConfigurationModule
 local CM = T:GetModule("Configuration")
 
----@type ToolsUI|nil
-local UI = Tools and Tools.UI
+Sim._callbacks = {}
+
+function Sim:RegisterCallback(name, func)
+    if type(name) == "string" and type(func) == "function" then
+        self._callbacks[name] = func
+    end
+end
+
+function Sim:UnregisterCallback(name)
+    if type(name) == "string" then
+        self._callbacks[name] = nil
+    end
+end
+
+function Sim:_FireCallback(event, ...)
+    for _, func in pairs(self._callbacks) do
+        if type(func) == "function" then
+            pcall(func, event, ...)
+        end
+    end
+end
 
 ---@return MythicPlusDungeonMonitorSubmodule|nil
 local function GetDungeonMonitor()
@@ -455,6 +468,7 @@ function Sim:StopSimulation()
     self._simToken = (self._simToken or 0) + 1
     self._simState = nil
     Logger.Info("Simulator: stopped")
+    self:_FireCallback("SIMULATOR_STOPPED")
 
     if self._restoreRunLoggerEnabled then
         self._restoreRunLoggerEnabled = nil
@@ -580,6 +594,7 @@ function Sim:_ScheduleNext(token)
     if not ev then
         Logger.Info("Simulator: complete")
         self._simState = nil
+        self:_FireCallback("SIMULATOR_STOPPED")
 
         if self._restoreRunLoggerEnabled then
             self._restoreRunLoggerEnabled = nil
@@ -595,9 +610,11 @@ function Sim:_ScheduleNext(token)
     local nextRel = EventRel(ev)
     local speed = tonumber(st.speed) or 1
     if speed <= 0 then speed = 1 end
-    local prevRel = tonumber(st.prevRel) or 0
 
-    local delay = (nextRel - prevRel) / speed
+    -- Use absolute time reference to avoid drift and handle resume correctly
+    local now = GetTime()
+    local currentVirtualTime = (now - st.startedAt) * speed
+    local delay = (nextRel - currentVirtualTime) / speed
     if delay < 0 then delay = 0 end
 
     local function fire()
@@ -611,6 +628,7 @@ function Sim:_ScheduleNext(token)
 
         self:_LogStage(ev, st.index or 0, st.total or 0)
         self:_DispatchEvent(ev)
+        self:_FireCallback("SIMULATOR_PROGRESS", st.index, st.total)
 
         self:_ScheduleNext(token)
     end
@@ -620,6 +638,36 @@ function Sim:_ScheduleNext(token)
     else
         fire()
     end
+end
+
+function Sim:PauseSimulation()
+    local st = self._simState
+    if not st or st.paused then return end
+
+    st.paused = true
+    st.pauseStart = GetTime()
+    self._simToken = (self._simToken or 0) + 1 -- Invalidate pending timers
+
+    Logger.Info("Simulator: paused")
+    self:_FireCallback("SIMULATOR_PAUSED")
+end
+
+function Sim:ResumeSimulation()
+    local st = self._simState
+    if not st or not st.paused then return end
+
+    local now = GetTime()
+    local pauseDuration = now - (st.pauseStart or now)
+    st.startedAt = st.startedAt + pauseDuration
+    st.paused = false
+    st.pauseStart = nil
+
+    self._simToken = (self._simToken or 0) + 1
+    local token = self._simToken
+
+    Logger.Info("Simulator: resumed")
+    self:_FireCallback("SIMULATOR_RESUMED", st.maxDuration, st.startedAt, st.speed, st.events)
+    self:_ScheduleNext(token)
 end
 
 ---@param jsonText string
@@ -720,6 +768,14 @@ function Sim:StartSimulationFromData(parsed, opts)
 
     self._simToken = (self._simToken or 0) + 1
     local token = self._simToken
+    local startedAt = type(GetTime) == "function" and GetTime() or 0
+
+    -- Calculate max duration
+    local maxDuration = 0
+    if #events > 0 then
+        maxDuration = EventRel(events[#events])
+    end
+
     self._simState = {
         token = token,
         meta = parsed.meta,
@@ -729,10 +785,12 @@ function Sim:StartSimulationFromData(parsed, opts)
         index = 0,
         prevRel = 0,
         speed = speed,
-        startedAt = type(GetTime) == "function" and GetTime() or 0,
+        startedAt = startedAt,
+        maxDuration = maxDuration,
     }
 
     Logger.Info(("Simulator: starting (%d events), speed x%.2f"):format(#events, speed))
+    self:_FireCallback("SIMULATOR_STARTED", #events, maxDuration, events, startedAt, speed)
     self:_ScheduleNext(token)
 end
 
@@ -740,146 +798,6 @@ end
 function Sim:SimulateSingleEvent(ev)
     if type(ev) ~= "table" then return end
     self:_DispatchEvent(ev)
-end
-
--- ----------------------------
--- Simple paste-to-run UI
--- ----------------------------
-
-function Sim:_EnsureFrame()
-    if self._frame and self._editBox then
-        return
-    end
-
-    local frame = CreateFrame("Frame", "TwichUI_MythicPlus_SimulatorFrame", UIParent, "BackdropTemplate")
-    frame:SetSize(760, 520)
-    frame:SetPoint("CENTER")
-    frame:SetFrameStrata("DIALOG")
-    frame:Hide()
-
-    frame:SetMovable(true)
-    frame:SetClampedToScreen(true)
-
-    if frame.SetTemplate then
-        frame:SetTemplate("Transparent")
-    else
-        frame:SetBackdrop({
-            bgFile = "Interface/Tooltips/UI-Tooltip-Background",
-            edgeFile = "Interface/Tooltips/UI-Tooltip-Border",
-            tile = true,
-            tileSize = 16,
-            edgeSize = 16,
-            insets = { left = 4, right = 4, top = 4, bottom = 4 },
-        })
-        frame:SetBackdropColor(0, 0, 0, 0.9)
-    end
-
-    local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    title:SetPoint("TOPLEFT", 12, -10)
-    title:SetText("TwichUI Mythic+ Simulator")
-
-    -- Drag handle (so dragging doesn't fight the edit box selection)
-    local drag = CreateFrame("Frame", nil, frame)
-    drag:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
-    drag:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, 0)
-    drag:SetHeight(42)
-    drag:EnableMouse(true)
-    drag:RegisterForDrag("LeftButton")
-    drag:SetScript("OnDragStart", function()
-        if frame and frame.StartMoving then
-            frame:StartMoving()
-        end
-    end)
-    drag:SetScript("OnDragStop", function()
-        if frame and frame.StopMovingOrSizing then
-            frame:StopMovingOrSizing()
-        end
-    end)
-
-    local hint = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    hint:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -6)
-    hint:SetText("Paste a TwichUI_RunLog_v2 JSON export, then click Start")
-
-    local close = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
-    close:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -2, -2)
-
-    local startBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    startBtn:SetSize(120, 22)
-    startBtn:SetPoint("TOPLEFT", frame, "TOPLEFT", 12, -52)
-    startBtn:SetText("Start")
-
-    local stopBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    stopBtn:SetSize(120, 22)
-    stopBtn:SetPoint("LEFT", startBtn, "RIGHT", 8, 0)
-    stopBtn:SetText("Stop")
-
-    local speedLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    speedLabel:SetPoint("LEFT", stopBtn, "RIGHT", 12, 0)
-    speedLabel:SetText("Speed")
-
-    local speedBox = CreateFrame("EditBox", nil, frame, "InputBoxTemplate")
-    speedBox:SetSize(60, 20)
-    speedBox:SetPoint("LEFT", speedLabel, "RIGHT", 6, 0)
-    speedBox:SetAutoFocus(false)
-    speedBox:SetNumeric(false)
-    speedBox:SetText(tostring(GetConfiguredSpeed()))
-
-    local scroll = CreateFrame("ScrollFrame", "TwichUI_MythicPlus_SimulatorScrollFrame", frame,
-        "UIPanelScrollFrameTemplate")
-    scroll:SetPoint("TOPLEFT", frame, "TOPLEFT", 12, -84)
-    scroll:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -32, 12)
-
-    local editBox = CreateFrame("EditBox", nil, scroll)
-    editBox:SetMultiLine(true)
-    editBox:SetAutoFocus(false)
-    editBox:EnableMouse(true)
-    editBox:SetFontObject("ChatFontNormal")
-    editBox:SetWidth(700)
-    editBox:SetTextInsets(6, 6, 6, 6)
-    editBox:SetScript("OnEscapePressed", function() frame:Hide() end)
-    editBox:SetScript("OnTextChanged", function() scroll:UpdateScrollChildRect() end)
-    scroll:SetScrollChild(editBox)
-
-    frame:SetScript("OnShow", function()
-        if editBox and editBox.SetFocus then
-            editBox:SetFocus()
-            editBox:HighlightText()
-        end
-        speedBox:SetText(tostring(GetConfiguredSpeed()))
-    end)
-
-    startBtn:SetScript("OnClick", function()
-        local jsonText = editBox:GetText() or ""
-        local speed = ClampNumber(speedBox:GetText(), 0.1, 50, GetConfiguredSpeed())
-        Sim:StartSimulationFromJSON(jsonText, { speed = speed })
-    end)
-
-    stopBtn:SetScript("OnClick", function()
-        Sim:StopSimulation()
-    end)
-
-    -- ElvUI skinning (best-effort)
-    if UI then
-        UI.SkinButton(startBtn)
-        UI.SkinButton(stopBtn)
-        UI.SkinCloseButton(close)
-        UI.SkinScrollBar(scroll)
-        UI.SkinEditBox(speedBox)
-        UI.SkinEditBox(editBox)
-    end
-
-    self._frame = frame
-    self._editBox = editBox
-end
-
-function Sim:ToggleFrame()
-    self:_EnsureFrame()
-    if not self._frame then return end
-    if self._frame.IsShown and self._frame:IsShown() then
-        self._frame:Hide()
-    else
-        self._frame:Show()
-    end
 end
 
 function Sim:Enable()
@@ -894,9 +812,6 @@ function Sim:Disable()
     self:StopSimulation()
     Module:Disable()
     self.enabled = false
-    if self._frame then
-        self._frame:Hide()
-    end
     Logger.Debug("Mythic+ simulator disabled")
 end
 

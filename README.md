@@ -30,3 +30,12 @@ WowUp will automatically check for updates.
 2. Extract the contents.
 3. Move the `TwichUI` folder to your World of Warcraft AddOns directory:
    - Windows Default: `C:\Program Files (x86)\World of Warcraft\_retail_\Interface\AddOns`
+
+## Roadmap
+
+### Planned
+
+- [Development] Live stream events from a Mythic+ from one player to another
+- [Development] In-depth simulation capabilities
+- [Mythic+] What-if analysis of dungeon runs
+- [Mythic+] Player season summary
