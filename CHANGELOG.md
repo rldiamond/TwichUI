@@ -1,3 +1,7 @@
+### Version 0.05-ALPHA [ December 31 2025 ]
+
+- Added tier sets to the Best in Slot manager's list of items
+
 ### Version 0.04-ALPHA [ December 31 2025 ]
 
 - Added cached syncing with linked players for Mythic+ recordings

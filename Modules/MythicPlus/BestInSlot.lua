@@ -381,6 +381,51 @@ local function BuildTierCache(force)
         ProcessInstance(true)  -- Raids
     end
 
+    -- Scan Item Sets (Tier Sets) from Adventure Guide
+    if C_LootJournal and C_LootJournal.GetItemSets then
+        local _, _, classID = UnitClass("player")
+        local specID = GetSpecializationInfo(GetSpecialization())
+        if classID and specID then
+            local itemSets = C_LootJournal.GetItemSets(classID, specID)
+            if itemSets then
+                for _, set in ipairs(itemSets) do
+                    local setItems = C_LootJournal.GetItemSetItems(set.setID)
+                    if setItems then
+                        for _, item in ipairs(setItems) do
+                            -- Add to Instance Loot Cache under "Tier Sets"
+                            if not newInstanceLootCache["Tier Sets"] then
+                                newInstanceLootCache["Tier Sets"] = {}
+                            end
+
+                            local alreadyInList = false
+                            for _, id in ipairs(newInstanceLootCache["Tier Sets"]) do
+                                if id == item.itemID then
+                                    alreadyInList = true
+                                    break
+                                end
+                            end
+
+                            if not alreadyInList then
+                                table.insert(newInstanceLootCache["Tier Sets"], item.itemID)
+                            end
+
+                            -- If not already in cache, add it
+                            if not newLootCache[item.itemID] then
+                                newLootCache[item.itemID] = set.name .. " (Tier Set)"
+
+                                -- Try to get item info (might not be cached yet)
+                                local itemName = GetItemInfo(item.itemID)
+                                if itemName then
+                                    newNameCache[CleanString(itemName)] = item.itemID
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
     EJ_SetLootFilter(oldClassID, oldSpecID)
     EJ_SelectTier(oldTier)
     EJ_SetDifficulty(oldDifficulty)
@@ -656,7 +701,7 @@ local function GetSources()
         table.sort(dungeons)
     end
 
-    return {
+    local result = {
         {
             label = "All",
             options = { "All Items" }
@@ -671,11 +716,19 @@ local function GetSources()
         },
         {
             label = "Other",
-            options = {
-                "Custom Item"
-            }
+            options = { "Custom Item" }
         }
     }
+
+    if TierInstanceLootCache and TierInstanceLootCache["Tier Sets"] then
+        -- Insert before "Other"
+        table.insert(result, #result, {
+            label = "Item Sets",
+            options = { "Tier Sets" }
+        })
+    end
+
+    return result
 end
 
 local function CreateChooserFrame(parent)
