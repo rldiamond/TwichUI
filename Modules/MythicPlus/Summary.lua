@@ -32,7 +32,6 @@ local TT = (TM and TM.Text) or
     { Color = function(_, text) return text end, ColorByClass = function(_, text) return text end }
 local CT = (TM and TM.Colors) or
     { TWICH = { TEXT_PRIMARY = "#FFFFFF", TEXT_MUTED = "#AAAAAA", SECONDARY_ACCENT = "#FFFFFF", PANEL_BG = "#000000" } }
-
 local function HexToRGB(hex)
     if not hex or type(hex) ~= "string" then return 1, 1, 1 end
     if hex:sub(1, 1) == " " then hex = hex:gsub("%s+", "") end
@@ -47,6 +46,8 @@ local function HexToRGB(hex)
     end
     return 1, 1, 1
 end
+
+local DEFAULT_REWARD_ICON = "Interface\\Icons\\INV_Misc_QuestionMark"
 
 local function GetFontPath()
     if not CM or not MythicPlusModule or not MythicPlusModule.CONFIGURATION then
@@ -83,7 +84,7 @@ local function GetCurrentWeeklyAffixes()
                     local entryAny = entry
                     id = entryAny.id or entryAny.affixID or entryAny.affixId
                     level = entryAny.startingLevel or entryAny.startingKeystoneLevel or entryAny.requiredLevel or
-                    entryAny.level
+                        entryAny.level
                 end
                 id = tonumber(id)
                 level = tonumber(level)
@@ -106,6 +107,92 @@ local function GetAffixInfo(affixID)
         end
     end
     return nil, nil, nil
+end
+
+-- Season reward mapping is intentionally empty by default.
+-- If you want markers to show real reward icons/links, populate this per-season.
+-- Shape: SEASON_REWARDS_BY_SEASON[seasonID][scoreTarget] = { achievementID = number|nil, itemID = number|nil }
+local SEASON_REWARDS_BY_SEASON = {}
+
+-- Manual fallback rewards (useful if you just want to hardcode the current season's rewards).
+-- Fill in `itemID` (and/or `achievementID`) for the score targets you care about.
+-- Example:
+--   [2000] = { itemID = 123456 },
+-- Note: if both are nil, the UI will show a placeholder icon.
+local MANUAL_REWARDS_BY_SCORE = {
+    [2000] = { itemID = 248248, achievementID = 41973 },
+    [2500] = { itemID = 246737, achievementID = 42171 },
+    [3000] = { itemID = 247822, achievementID = 42172 },
+}
+
+local function GetCurrentMythicPlusSeasonID()
+    local C_MythicPlus = _G.C_MythicPlus
+    if C_MythicPlus and type(C_MythicPlus.GetCurrentSeason) == "function" then
+        local ok, seasonID = pcall(C_MythicPlus.GetCurrentSeason)
+        if ok then
+            seasonID = tonumber(seasonID)
+            if seasonID then return seasonID end
+        end
+    end
+    return nil
+end
+
+local function GetAchievementInfoSafe(achievementID)
+    achievementID = tonumber(achievementID)
+    if not achievementID then return nil, nil end
+
+    local name
+    local description
+    if type(_G.GetAchievementInfo) == "function" then
+        local ok, a1, a2 = pcall(_G.GetAchievementInfo, achievementID)
+        if ok then
+            name = a1
+            description = a2
+        end
+    end
+
+    local rewardText
+    if type(_G.GetAchievementReward) == "function" then
+        local ok, text = pcall(_G.GetAchievementReward, achievementID)
+        if ok then rewardText = text end
+    end
+
+    -- Prefer explicit reward text; fall back to description.
+    return name, rewardText or description
+end
+
+local function GetItemRewardPresentationSafe(itemID)
+    itemID = tonumber(itemID)
+    if not itemID then return nil, nil end
+
+    local icon
+    local link
+    if _G.C_Item then
+        if type(_G.C_Item.GetItemIconByID) == "function" then
+            icon = _G.C_Item.GetItemIconByID(itemID)
+        end
+        if type(_G.C_Item.GetItemLinkByID) == "function" then
+            link = _G.C_Item.GetItemLinkByID(itemID)
+        end
+    end
+    return icon, link
+end
+
+local function GetAchievementRewardPresentationSafe(achievementID)
+    achievementID = tonumber(achievementID)
+    if not achievementID then return nil, nil end
+
+    local icon
+    local link
+    if type(_G.GetAchievementInfo) == "function" then
+        local ok, _, _, _, _, _, _, _, _, tex = pcall(_G.GetAchievementInfo, achievementID)
+        if ok then icon = tex end
+    end
+    if type(_G.GetAchievementLink) == "function" then
+        local ok, aLink = pcall(_G.GetAchievementLink, achievementID)
+        if ok then link = aLink end
+    end
+    return icon, link
 end
 
 local function ColorizeDungeonScore(score, text)
@@ -527,6 +614,124 @@ function Summary:Refresh(panel)
     end
 
     do
+        local bar = panel.__twichuiSeasonBar
+        if bar and type(bar.SetValue) == "function" then
+            local maxScore = 3000
+            if type(bar.SetMinMaxValues) == "function" then
+                bar:SetMinMaxValues(0, maxScore)
+            end
+
+            local clamped = score
+            if clamped < 0 then clamped = 0 end
+            if clamped > maxScore then clamped = maxScore end
+            bar:SetValue(clamped)
+
+            if type(bar.SetStatusBarColor) == "function" then
+                local r, g, b = HexToRGB(CT.TWICH.SECONDARY_ACCENT)
+                bar:SetStatusBarColor(r, g, b, 1)
+            end
+
+            if panel.__twichuiSeasonScoreText then
+                panel.__twichuiSeasonScoreText:SetText(string.format("%d / %d", score, maxScore))
+            end
+
+            local markers = panel.__twichuiSeasonMarkers
+            if type(markers) == "table" and type(bar.GetWidth) == "function" then
+                local seasonID = GetCurrentMythicPlusSeasonID()
+                local seasonRewards = seasonID and SEASON_REWARDS_BY_SEASON[seasonID] or nil
+                if seasonRewards == nil then
+                    seasonRewards = MANUAL_REWARDS_BY_SCORE
+                end
+                local w = bar:GetWidth() or 0
+                if w > 0 then
+                    for _, m in ipairs(markers) do
+                        if m and m.__twichuiScoreTarget then
+                            local pct = m.__twichuiScoreTarget / maxScore
+                            local x = math.floor((w * pct) + 0.5)
+                            m:ClearAllPoints()
+                            m:SetPoint("BOTTOM", bar, "TOPLEFT", x, 0)
+
+                            if m.__twichuiMarkerLine then
+                                local line = m.__twichuiMarkerLine
+                                line:ClearAllPoints()
+                                line:SetPoint("CENTER", bar, "LEFT", x, 1)
+                                local barH = (type(bar.GetHeight) == "function" and bar:GetHeight()) or 26
+                                line:SetSize(2, barH + 10)
+                            end
+
+                            if m.__twichuiLabel then
+                                m.__twichuiLabel:ClearAllPoints()
+                                m.__twichuiLabel:SetPoint("CENTER", bar, "LEFT", x, 1)
+                            end
+
+                            -- Optional: attach Blizzard achievement info for the current season.
+                            local ach
+                            local itemID
+                            if seasonRewards and type(seasonRewards) == "table" then
+                                local entry = seasonRewards[m.__twichuiScoreTarget]
+                                if type(entry) == "table" then
+                                    ach = entry.achievementID
+                                    itemID = entry.itemID
+                                end
+                            end
+                            m.__twichuiAchievementID = ach
+                            if ach then
+                                local achName, rewardText = GetAchievementInfoSafe(ach)
+                                m.__twichuiAchievementName = achName
+                                m.__twichuiAchievementRewardText = rewardText
+                            else
+                                m.__twichuiAchievementName = nil
+                                m.__twichuiAchievementRewardText = nil
+                            end
+
+                            m.__twichuiRewardItemID = tonumber(itemID)
+                            do
+                                local rewardIcon, rewardLink
+                                if m.__twichuiRewardItemID then
+                                    if _G.C_Item and type(_G.C_Item.RequestLoadItemDataByID) == "function" then
+                                        _G.C_Item.RequestLoadItemDataByID(m.__twichuiRewardItemID)
+                                    end
+                                    rewardIcon, rewardLink = GetItemRewardPresentationSafe(m.__twichuiRewardItemID)
+                                elseif ach then
+                                    rewardIcon, rewardLink = GetAchievementRewardPresentationSafe(ach)
+                                end
+
+                                if m.__twichuiRewardItemID then
+                                    local itemLink
+                                    if _G.C_Item and type(_G.C_Item.GetItemLinkByID) == "function" then
+                                        itemLink = _G.C_Item.GetItemLinkByID(m.__twichuiRewardItemID)
+                                    end
+                                    if itemLink then
+                                        rewardLink = itemLink
+                                    end
+                                end
+
+                                m.__twichuiRewardIcon = rewardIcon
+                                m.__twichuiRewardLink = rewardLink
+                                if m.__twichuiRewardIconTex and rewardIcon then
+                                    m.__twichuiRewardIconTex:SetTexture(rewardIcon)
+                                    m.__twichuiRewardIconTex:Show()
+                                    if m.__twichuiRewardIconFrameTex then
+                                        m.__twichuiRewardIconFrameTex:Show()
+                                    end
+                                elseif m.__twichuiRewardIconTex then
+                                    -- If we don't know the reward for this season yet, keep the UI stable.
+                                    -- Show a placeholder icon instead of hiding the marker.
+                                    m.__twichuiRewardIconTex:SetTexture(DEFAULT_REWARD_ICON)
+                                    m.__twichuiRewardIconTex:Show()
+                                    if m.__twichuiRewardIconFrameTex then
+                                        m.__twichuiRewardIconFrameTex:Show()
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    do
         local buttons = panel.__twichuiAffixButtons
         if type(buttons) == "table" then
             local affixes = GetCurrentWeeklyAffixes()
@@ -714,6 +919,9 @@ local function CreateSummaryPanel(parent)
     ---@field __twichuiScoreValue FontString
     ---@field __twichuiIlvlValue FontString
     ---@field __twichuiAffixButtons table|nil
+    ---@field __twichuiSeasonBar StatusBar|nil
+    ---@field __twichuiSeasonScoreText FontString|nil
+    ---@field __twichuiSeasonMarkers table|nil
     ---@field __twichuiEventsEnabled boolean
     ---@field __twichuiModelRefreshToken number|nil
     ---@field __twichuiDebugCount number|nil
@@ -897,6 +1105,421 @@ local function CreateSummaryPanel(parent)
 
         btn:Hide()
         panel.__twichuiAffixButtons[i] = btn
+    end
+
+    -- Season progress (bottom of panel)
+    do
+        local season = CreateFrame("Frame", nil, panel)
+        season:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", 0, 10)
+        season:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", 0, 10)
+        season:SetHeight(84)
+
+        local seasonBg = season:CreateTexture(nil, "BACKGROUND")
+        seasonBg:SetAllPoints()
+        do
+            local r, g, b = HexToRGB(CT.TWICH.PANEL_BG)
+            seasonBg:SetColorTexture(r, g, b, 0.25)
+        end
+
+        local title = season:CreateFontString(nil, "OVERLAY")
+        title:SetPoint("TOPLEFT", season, "TOPLEFT", 12, -8)
+        title:SetJustifyH("LEFT")
+        title:SetFontObject(_G.GameFontNormalSmall)
+        if fontPath and title.SetFont then
+            title:SetFont(fontPath, 11, "OUTLINE")
+        end
+        title:SetText(TT.Color(CT.TWICH.TEXT_MUTED, "Season progress"))
+
+        local bar = CreateFrame("StatusBar", nil, season)
+        bar:SetPoint("BOTTOMLEFT", season, "BOTTOMLEFT", 12, 14)
+        bar:SetPoint("BOTTOMRIGHT", season, "BOTTOMRIGHT", -12, 14)
+        bar:SetHeight(26)
+        bar:SetStatusBarTexture("Interface\\Buttons\\WHITE8x8")
+        panel.__twichuiSeasonBar = bar
+
+        local barBg = bar:CreateTexture(nil, "BACKGROUND")
+        barBg:SetAllPoints()
+        do
+            local r, g, b = HexToRGB(CT.TWICH.TEXT_MUTED)
+            barBg:SetColorTexture(r, g, b, 0.18)
+        end
+
+        local barText = bar:CreateFontString(nil, "OVERLAY")
+        barText:ClearAllPoints()
+        barText:SetPoint("TOPLEFT", bar, "TOPLEFT", 0, 1)
+        barText:SetPoint("BOTTOMRIGHT", bar, "BOTTOMRIGHT", 0, 1)
+        barText:SetJustifyH("CENTER")
+        if type(barText.SetJustifyV) == "function" then
+            barText:SetJustifyV("MIDDLE")
+        end
+        barText:SetFontObject(_G.GameFontNormalSmall)
+        if fontPath and barText.SetFont then
+            barText:SetFont(fontPath, 11, "OUTLINE")
+        end
+        panel.__twichuiSeasonScoreText = barText
+
+        panel.__twichuiSeasonMarkers = panel.__twichuiSeasonMarkers or {}
+        local rewardMarkers = {
+            { score = 2000, title = "2,000 rating", desc = "2,000 rating mount/achievement" },
+            { score = 2500, title = "2,500 rating", desc = "2,500 rating tier visual enhance/achievement" },
+            { score = 3000, title = "3,000 rating", desc = "3,000 rating mount/achievement" },
+        }
+
+        for i = 1, #rewardMarkers do
+            local data = rewardMarkers[i]
+            local m = panel.__twichuiSeasonMarkers[i]
+            if not m then
+                m = CreateFrame("Button", nil, season)
+                m:SetSize(44, 54)
+                if type(m.SetFrameLevel) == "function" and type(bar.GetFrameLevel) == "function" then
+                    m:SetFrameLevel(bar:GetFrameLevel() + 5)
+                end
+                if type(m.RegisterForClicks) == "function" then
+                    m:RegisterForClicks("AnyUp")
+                end
+
+                local line = m:CreateTexture(nil, "ARTWORK")
+                line:SetPoint("TOP", m, "BOTTOM", 0, -6)
+                line:SetSize(2, 32)
+                local r, g, b = HexToRGB(CT.TWICH.TEXT_MUTED)
+                line:SetColorTexture(r, g, b, 0.75)
+                m.__twichuiMarkerLine = line
+
+                local rewardIcon = m:CreateTexture(nil, "OVERLAY")
+                rewardIcon:SetPoint("BOTTOM", m, "BOTTOM", 0, 12)
+                rewardIcon:SetSize(28, 28)
+                rewardIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+                rewardIcon:SetTexture(DEFAULT_REWARD_ICON)
+                rewardIcon:Show()
+                m.__twichuiRewardIconTex = rewardIcon
+
+                local rewardFrame = m:CreateTexture(nil, "ARTWORK")
+                rewardFrame:SetPoint("CENTER", rewardIcon, "CENTER", 0, 0)
+                rewardFrame:SetSize(40, 40)
+                rewardFrame:SetTexture("Interface\\AddOns\\TwichUI\\Media\\Textures\\reward-background.tga")
+                rewardFrame:Show()
+                m.__twichuiRewardIconFrameTex = rewardFrame
+
+                local label = m:CreateFontString(nil, "OVERLAY")
+                label:SetPoint("TOP", rewardIcon, "BOTTOM", 0, -2)
+                label:SetJustifyH("CENTER")
+                label:SetFontObject(_G.GameFontNormalSmall)
+                if fontPath and label.SetFont then
+                    label:SetFont(fontPath, 13, "OUTLINE")
+                end
+                if type(label.SetTextColor) == "function" then
+                    label:SetTextColor(1, 1, 1, 1)
+                end
+                m.__twichuiLabel = label
+
+                m:SetScript("OnEnter", function(self)
+                    do
+                        local markerLine = self.__twichuiMarkerLine
+                        if markerLine and type(markerLine.SetColorTexture) == "function" then
+                            local rr, rg, rb = HexToRGB(CT.TWICH.SECONDARY_ACCENT)
+                            markerLine:SetColorTexture(rr, rg, rb, 1.0)
+                        end
+                    end
+
+                    do
+                        local frameTex = self.__twichuiRewardIconFrameTex
+                        if frameTex and frameTex:IsShown() and type(frameTex.SetVertexColor) == "function" then
+                            local rr, rg, rb = HexToRGB(CT.TWICH.SECONDARY_ACCENT)
+                            frameTex:SetVertexColor(rr, rg, rb, 1.0)
+                        end
+                    end
+
+                    if not _G.GameTooltip then return end
+                    _G.GameTooltip:SetOwner(self, "ANCHOR_TOP")
+
+                    if self.__twichuiRewardItemID and _G.C_Item and type(_G.C_Item.RequestLoadItemDataByID) == "function" then
+                        _G.C_Item.RequestLoadItemDataByID(self.__twichuiRewardItemID)
+                        if type(_G.C_Item.GetItemLinkByID) == "function" then
+                            local itemLink = _G.C_Item.GetItemLinkByID(self.__twichuiRewardItemID)
+                            if itemLink then
+                                self.__twichuiRewardLink = itemLink
+                            end
+                        end
+                    end
+
+                    if self.__twichuiRewardItemID and type(_G.GameTooltip.SetItemByID) == "function" then
+                        pcall(_G.GameTooltip.SetItemByID, _G.GameTooltip, self.__twichuiRewardItemID)
+                        if self.__twichuiAchievementName then
+                            _G.GameTooltip:AddLine(self.__twichuiAchievementName, 1, 1, 1)
+                        end
+                        if self.__twichuiTitle then
+                            _G.GameTooltip:AddLine(self.__twichuiTitle, 1, 1, 1)
+                        end
+                    elseif self.__twichuiRewardLink and type(_G.GameTooltip.SetHyperlink) == "function" then
+                        pcall(_G.GameTooltip.SetHyperlink, _G.GameTooltip, self.__twichuiRewardLink)
+                        if self.__twichuiAchievementName then
+                            _G.GameTooltip:AddLine(self.__twichuiAchievementName, 1, 1, 1)
+                        end
+                        if self.__twichuiTitle then
+                            _G.GameTooltip:AddLine(self.__twichuiTitle, 1, 1, 1)
+                        end
+                    else
+                        _G.GameTooltip:SetText(self.__twichuiTitle or "Season reward", 1, 1, 1)
+                        if self.__twichuiAchievementName then
+                            _G.GameTooltip:AddLine(self.__twichuiAchievementName, 1, 1, 1)
+                        end
+                        if self.__twichuiAchievementRewardText then
+                            _G.GameTooltip:AddLine(self.__twichuiAchievementRewardText, nil, nil, nil, true)
+                        elseif self.__twichuiDesc then
+                            _G.GameTooltip:AddLine(self.__twichuiDesc, nil, nil, nil, true)
+                        end
+                    end
+                    _G.GameTooltip:Show()
+                end)
+
+                if type(m.EnableMouse) == "function" then
+                    m:EnableMouse(true)
+                end
+
+                m:SetScript("OnClick", function(self)
+                    local function InsertLinkIntoChat(chatLink)
+                        if type(chatLink) ~= "string" or not chatLink:find("|H") then
+                            return false
+                        end
+
+                        if type(_G.ChatEdit_InsertLink) == "function" then
+                            if _G.ChatEdit_InsertLink(chatLink) then
+                                return true
+                            end
+                        end
+
+                        if type(_G.ChatFrame_OpenChat) == "function" then
+                            _G.ChatFrame_OpenChat("")
+                        end
+                        if type(_G.ChatEdit_InsertLink) == "function" then
+                            return _G.ChatEdit_InsertLink(chatLink) and true or false
+                        end
+                        return false
+                    end
+
+                    local itemID = tonumber(self.__twichuiRewardItemID)
+                    local link = self.__twichuiRewardLink
+
+                    if itemID and _G.C_Item then
+                        if type(_G.C_Item.RequestLoadItemDataByID) == "function" then
+                            _G.C_Item.RequestLoadItemDataByID(itemID)
+                        end
+
+                        if type(_G.C_Item.GetItemLinkByID) == "function" then
+                            link = _G.C_Item.GetItemLinkByID(itemID) or link
+                        end
+                    end
+
+                    -- Ctrl+Click preview (DressUp) should work even when item links aren't cached yet.
+                    local wantsDressUp = false
+                    if type(_G.IsModifiedClick) == "function" and _G.IsModifiedClick("DRESSUP") then
+                        wantsDressUp = true
+                    elseif type(_G.IsControlKeyDown) == "function" and _G.IsControlKeyDown() then
+                        wantsDressUp = true
+                    end
+
+                    if wantsDressUp then
+                        local function PreviewNow(id, hyperlink)
+                            id = tonumber(id)
+
+                            -- Mount items: resolve to mountID and preview immediately.
+                            if id and _G.C_MountJournal and type(_G.C_MountJournal.GetMountFromItem) == "function" then
+                                local ok, mountID = pcall(_G.C_MountJournal.GetMountFromItem, id)
+                                mountID = ok and tonumber(mountID) or nil
+                                if mountID and mountID > 0 then
+                                    if type(_G.DressUpMount) == "function" then
+                                        pcall(_G.DressUpMount, mountID)
+                                        return true
+                                    end
+                                end
+                            end
+
+                            -- Regular items: need a real hyperlink to reliably preview.
+                            if type(_G.DressUpItemLink) == "function" and type(hyperlink) == "string" and hyperlink:find("|H") then
+                                pcall(_G.DressUpItemLink, hyperlink)
+                                return true
+                            end
+
+                            return false
+                        end
+
+                        if PreviewNow(itemID, link) then
+                            return
+                        end
+
+                        -- If item link isn't cached yet, retry briefly while item data loads.
+                        if itemID and _G.C_Timer and type(_G.C_Timer.After) == "function" then
+                            local attempts = 0
+                            local function tryDressUp()
+                                attempts = attempts + 1
+                                if not self or (type(self.IsShown) == "function" and not self:IsShown()) then return end
+
+                                local liveLink = self.__twichuiRewardLink
+                                if _G.C_Item and type(_G.C_Item.GetItemLinkByID) == "function" then
+                                    liveLink = _G.C_Item.GetItemLinkByID(itemID) or liveLink
+                                end
+                                if type(liveLink) == "string" and liveLink:find("|H") then
+                                    self.__twichuiRewardLink = liveLink
+                                end
+
+                                if PreviewNow(itemID, liveLink) then
+                                    return
+                                end
+
+                                if attempts < 8 then
+                                    _G.C_Timer.After(0.1, tryDressUp)
+                                end
+                            end
+                            tryDressUp()
+                            return
+                        end
+
+                        return
+                    end
+
+                    if type(link) == "string" and link:find("|H") then
+                        self.__twichuiRewardLink = link
+                    end
+
+                    -- If Blizzard can handle this modified click (chat-link, dressup, etc), let it.
+                    if type(_G.HandleModifiedItemClick) == "function" and type(link) == "string" and link:find("|H") then
+                        if _G.HandleModifiedItemClick(link) then
+                            return
+                        end
+                    end
+
+                    -- Make Shift+Click reliably insert into chat.
+                    if type(_G.IsModifiedClick) == "function" and _G.IsModifiedClick("CHATLINK") then
+                        -- If we don't have a real hyperlink yet, retry briefly while item data loads.
+                        if (type(link) ~= "string" or not link:find("|H")) and itemID and _G.C_Item
+                            and type(_G.C_Item.GetItemLinkByID) == "function" and _G.C_Timer
+                            and type(_G.C_Timer.After) == "function" then
+                            local attempts = 0
+                            local function tryInsert()
+                                attempts = attempts + 1
+                                if not self or (type(self.IsShown) == "function" and not self:IsShown()) then return end
+
+                                local liveLink = _G.C_Item.GetItemLinkByID(itemID) or self.__twichuiRewardLink
+                                local ok = InsertLinkIntoChat(liveLink)
+                                if Logger and type(Logger.Debug) == "function" then
+                                    self.__twichuiLinkDebugCount = (self.__twichuiLinkDebugCount or 0) + 1
+                                    if self.__twichuiLinkDebugCount <= 16 then
+                                        Logger.Debug(
+                                            "SeasonReward ShiftClick tryInsert(" ..
+                                            tostring(attempts) .. "): ok=" .. tostring(ok)
+                                            .. " liveLink=" .. tostring(liveLink)
+                                        )
+                                    end
+                                end
+
+                                if ok then
+                                    return
+                                end
+                                if attempts < 8 then
+                                    _G.C_Timer.After(0.1, tryInsert)
+                                end
+                            end
+                            tryInsert()
+                            return
+                        end
+
+                        if Logger and type(Logger.Debug) == "function" then
+                            self.__twichuiLinkDebugCount = (self.__twichuiLinkDebugCount or 0) + 1
+                            if self.__twichuiLinkDebugCount <= 8 then
+                                Logger.Debug(
+                                    "SeasonReward ShiftClick: itemID=" .. tostring(itemID)
+                                    .. " link=" .. tostring(link)
+                                    .. " hasHyper=" .. tostring(type(link) == "string" and link:find("|H") ~= nil)
+                                )
+                            end
+                        end
+
+                        -- Item links may not be cached yet; retry briefly if needed.
+                        if itemID and _G.C_Item and type(_G.C_Item.GetItemLinkByID) == "function" and _G.C_Timer and type(_G.C_Timer.After) == "function" then
+                            local attempts = 0
+                            local function tryInsert()
+                                attempts = attempts + 1
+                                if not self or (type(self.IsShown) == "function" and not self:IsShown()) then return end
+
+                                local liveLink = _G.C_Item.GetItemLinkByID(itemID) or self.__twichuiRewardLink
+                                local handled = false
+                                if type(_G.HandleModifiedItemClick) == "function" then
+                                    handled = _G.HandleModifiedItemClick(liveLink) and true or false
+                                end
+                                local ok = handled or InsertLinkIntoChat(liveLink)
+                                if Logger and type(Logger.Debug) == "function" then
+                                    self.__twichuiLinkDebugCount = (self.__twichuiLinkDebugCount or 0) + 1
+                                    if self.__twichuiLinkDebugCount <= 16 then
+                                        Logger.Debug(
+                                            "SeasonReward ShiftClick tryInsert(" ..
+                                            tostring(attempts) .. "): ok=" .. tostring(ok)
+                                            .. " handled=" .. tostring(handled)
+                                            .. " liveLink=" .. tostring(liveLink)
+                                        )
+                                    end
+                                end
+
+                                if ok then
+                                    return
+                                end
+                                if attempts < 8 then
+                                    _G.C_Timer.After(0.1, tryInsert)
+                                end
+                            end
+                            tryInsert()
+                            return
+                        end
+
+                        local handled = false
+                        if type(_G.HandleModifiedItemClick) == "function" then
+                            handled = _G.HandleModifiedItemClick(link) and true or false
+                        end
+                        local ok = handled or InsertLinkIntoChat(link)
+                        if Logger and type(Logger.Debug) == "function" then
+                            self.__twichuiLinkDebugCount = (self.__twichuiLinkDebugCount or 0) + 1
+                            if self.__twichuiLinkDebugCount <= 16 then
+                                Logger.Debug(
+                                    "SeasonReward ShiftClick immediate: ok=" .. tostring(ok)
+                                    .. " handled=" .. tostring(handled)
+                                    .. " link=" .. tostring(link)
+                                )
+                            end
+                        end
+                        return
+                    end
+
+                    -- No special modifier: nothing else to do.
+                end)
+
+                m:SetScript("OnLeave", function(self)
+                    do
+                        local markerLine = self.__twichuiMarkerLine
+                        if markerLine and type(markerLine.SetColorTexture) == "function" then
+                            local rr, rg, rb = HexToRGB(CT.TWICH.TEXT_MUTED)
+                            markerLine:SetColorTexture(rr, rg, rb, 0.75)
+                        end
+                    end
+
+                    do
+                        local frameTex = self.__twichuiRewardIconFrameTex
+                        if frameTex and frameTex:IsShown() and type(frameTex.SetVertexColor) == "function" then
+                            frameTex:SetVertexColor(1, 1, 1, 1)
+                        end
+                    end
+                    if _G.GameTooltip then _G.GameTooltip:Hide() end
+                end)
+
+                panel.__twichuiSeasonMarkers[i] = m
+            end
+
+            m.__twichuiScoreTarget = data.score
+            m.__twichuiTitle = data.title
+            m.__twichuiDesc = data.desc
+            if m.__twichuiLabel then
+                m.__twichuiLabel:SetText(tostring(data.score))
+            end
+            m:Show()
+        end
     end
 
     panel:SetScript("OnShow", function()
