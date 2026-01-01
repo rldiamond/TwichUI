@@ -670,6 +670,50 @@ function Sim:ResumeSimulation()
     self:_ScheduleNext(token)
 end
 
+function Sim:SeekSimulation(targetTime)
+    local st = self._simState
+    if not st then return end
+
+    targetTime = math.max(0, math.min(targetTime, st.maxDuration))
+    
+    -- Find the event index just before or at targetTime
+    local newIndex = 0
+    local prevRel = 0
+    for i, ev in ipairs(st.events) do
+        local rel = EventRel(ev)
+        if rel > targetTime then
+            break
+        end
+        newIndex = i
+        prevRel = rel
+    end
+    
+    st.index = newIndex
+    st.prevRel = prevRel
+    
+    local now = GetTime()
+    local speed = st.speed
+    
+    -- Recalculate startedAt so that (now - startedAt) * speed == targetTime
+    st.startedAt = now - (targetTime / speed)
+    
+    if st.paused then
+        st.pauseStart = now
+    end
+    
+    self._simToken = (self._simToken or 0) + 1
+    local token = self._simToken
+    
+    Logger.Info(("Simulator: seeked to %.1fs"):format(targetTime))
+    
+    if st.paused then
+        self:_FireCallback("SIMULATOR_SEEKED", targetTime, st.index, st.total)
+    else
+        self:_FireCallback("SIMULATOR_RESUMED", st.maxDuration, st.startedAt, st.speed, st.events)
+        self:_ScheduleNext(token)
+    end
+end
+
 ---@param jsonText string
 ---@param opts table|nil
 function Sim:StartSimulationFromJSON(jsonText, opts)
@@ -747,6 +791,8 @@ function Sim:StartSimulationFromData(parsed, opts)
         speed = GetConfiguredSpeed()
     end
     speed = ClampNumber(speed, 0.1, 50, 10)
+    
+    local startPaused = opts and opts.startPaused or false
 
     -- Ensure Mythic+ + DungeonMonitor are enabled so callbacks fire normally.
     if MythicPlusModule and type(MythicPlusModule.IsEnabled) == "function" and type(MythicPlusModule.Enable) == "function" then
@@ -787,11 +833,18 @@ function Sim:StartSimulationFromData(parsed, opts)
         speed = speed,
         startedAt = startedAt,
         maxDuration = maxDuration,
+        paused = startPaused,
+        pauseStart = startPaused and startedAt or nil,
     }
 
     Logger.Info(("Simulator: starting (%d events), speed x%.2f"):format(#events, speed))
     self:_FireCallback("SIMULATOR_STARTED", #events, maxDuration, events, startedAt, speed)
-    self:_ScheduleNext(token)
+    
+    if startPaused then
+        self:_FireCallback("SIMULATOR_PAUSED")
+    else
+        self:_ScheduleNext(token)
+    end
 end
 
 ---@param ev table

@@ -508,6 +508,31 @@ function RunSharingFrame:CreateFrame()
     -- Set color after skinning to ensure it takes effect
     progressBar:SetStatusBarColor(0.2, 0.6, 1.0) -- Bright Blue
 
+    -- Enable scrubbing
+    progressBar:EnableMouse(true)
+    progressBar:SetScript("OnMouseDown", function(self, button)
+        local width = self:GetWidth()
+        local x, y = GetCursorPosition()
+        local s = self:GetEffectiveScale()
+        x = x / s
+        local left = self:GetLeft()
+        local offset = x - left
+        
+        local pct = offset / width
+        pct = math.max(0, math.min(1, pct))
+        
+        local min, max = self:GetMinMaxValues()
+        local targetTime = min + (max - min) * pct
+        
+        if not RunSharingFrame.isSimulating then
+            RunSharingFrame:StartSimulation(true)
+        end
+        
+        if Simulator and Simulator.SeekSimulation then
+            Simulator:SeekSimulation(targetTime)
+        end
+    end)
+
     local timeText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     timeText:SetPoint("BOTTOM", frame, "BOTTOM", 60, 18)
     timeText:SetTextColor(0.2, 0.6, 1.0)
@@ -540,6 +565,23 @@ function RunSharingFrame:CreateFrame()
             elseif event == "SIMULATOR_PAUSED" then
                 self:StopProgressAnimation(true) -- Stop the OnUpdate loop
                 self:UpdateSimButtons(true, true)
+            elseif event == "SIMULATOR_SEEKED" then
+                local time, index, total = ...
+                self.progressBar:SetValue(time)
+                
+                local m = math.floor(time / 60)
+                local s = math.floor(time % 60)
+                local _, max = self.progressBar:GetMinMaxValues()
+                local tm = math.floor(max / 60)
+                local ts = math.floor(max % 60)
+                if self.timeText then
+                    self.timeText:SetText(string.format("%02d:%02d / %02d:%02d", m, s, tm, ts))
+                end
+                if self.eventText then
+                    self.eventText:SetText(string.format("Event: %d / %d", index, total))
+                end
+                
+                self:HighlightPlayingRow(index)
             elseif event == "SIMULATOR_RESUMED" then
                 local maxDuration, startedAt, speed, events = ...
                 self:StartProgressAnimation(maxDuration, startedAt, speed, events)
@@ -1388,6 +1430,25 @@ function RunSharingFrame:PopulateEventDetails(container, payload)
     return y + 5
 end
 
+function RunSharingFrame:StartSimulation(startPaused)
+    if not self.selectedIndex then return end
+    local db = self:GetDB()
+    local run = db.remoteRuns[self.selectedIndex]
+
+    if run and run.data then
+        local speed = 10
+        if self.speedInput then
+            speed = tonumber(self.speedInput:GetText()) or 10
+        end
+
+        if Simulator and Simulator.StartSimulationFromData then
+            Simulator:StartSimulationFromData(run.data, { speed = speed, startPaused = startPaused })
+        elseif Simulator and Simulator.StartSimulationFromJSON then
+            print("Simulator: StartSimulationFromData not found.")
+        end
+    end
+end
+
 function RunSharingFrame:OnSimulateClick()
     if self.isSimulating then
         if self.isPaused then
@@ -1402,24 +1463,7 @@ function RunSharingFrame:OnSimulateClick()
         return
     end
 
-    if not self.selectedIndex then return end
-    local db = self:GetDB()
-    local run = db.remoteRuns[self.selectedIndex]
-
-    if run and run.data then
-        local speed = 10
-        if self.speedInput then
-            speed = tonumber(self.speedInput:GetText()) or 10
-        end
-
-        if Simulator and Simulator.StartSimulationFromData then
-            Simulator:StartSimulationFromData(run.data, { speed = speed })
-        elseif Simulator and Simulator.StartSimulationFromJSON then
-            -- Fallback if we can convert to JSON, but we can't easily.
-            -- We should add StartSimulationFromData to Simulator.lua
-            print("Simulator: StartSimulationFromData not found.")
-        end
-    end
+    self:StartSimulation(false)
 end
 
 function RunSharingFrame:OnStopClick()
