@@ -31,8 +31,8 @@ MythicPlusModule.CONFIGURATION = {
     -- Main window
     MAIN_WINDOW_ENABLED = { key = "mythicplus.mainWindow.enabled", default = true, },
     MAIN_WINDOW_LOCKED = { key = "mythicplus.mainWindow.locked", default = false, },
-    MAIN_WINDOW_WIDTH = { key = "mythicplus.mainWindow.width", default = 420, },
-    MAIN_WINDOW_HEIGHT = { key = "mythicplus.mainWindow.height", default = 320, },
+    MAIN_WINDOW_WIDTH = { key = "mythicplus.mainWindow.width", default = 780, },
+    MAIN_WINDOW_HEIGHT = { key = "mythicplus.mainWindow.height", default = 500, },
     MAIN_WINDOW_SCALE = { key = "mythicplus.mainWindow.scale", default = 1.0, },
     MAIN_WINDOW_ALPHA = { key = "mythicplus.mainWindow.alpha", default = 1.0, },
     MAIN_WINDOW_FONT = { key = "mythicplus.mainWindow.font", default = "Expressway", },
