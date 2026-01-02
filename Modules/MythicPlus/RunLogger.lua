@@ -199,6 +199,7 @@ end
 ---@field endUnix number|nil
 ---@field endRel number|nil
 ---@field mapId number|nil
+---@field dungeonName string|nil
 ---@field level number|nil
 ---@field affixes number[]|nil
 ---@field player table|nil
@@ -207,10 +208,23 @@ end
 ---@field completion table|nil
 ---@field events TwichUIRunLogger_RunEvent[]
 
+---@class TwichUIRunLogger_RunHistoryEntry
+---@field run TwichUIRunLogger_Run
+---@field ackedBy table<string, boolean>
+
+---@class TwichUIRunLogger_RemoteRun
+---@field sender string
+---@field receivedAt number
+---@field data TwichUIRunLogger_Run
+
 ---@class TwichUIRunLoggerDB
 ---@field version number
 ---@field active TwichUIRunLogger_Run|nil
 ---@field lastCompleted TwichUIRunLogger_Run|nil
+---@field runHistory (TwichUIRunLogger_RunHistoryEntry|TwichUIRunLogger_Run)[]|nil
+---@field linkedReceiver string|nil
+---@field remoteRuns TwichUIRunLogger_RemoteRun[]|nil
+---@field registeredReceivers table<string, number>|nil
 
 ---@return TwichUIRunLoggerDB
 local function GetDB()
@@ -1066,8 +1080,11 @@ function MythicPlusRunLogger:_AddToHistory(run)
     local db = GetDB()
     if not db.runHistory then db.runHistory = {} end
 
-    -- Add to end
-    table.insert(db.runHistory, run)
+    -- Add to end. Store as a wrapper so we can track per-recipient ACK state.
+    table.insert(db.runHistory, {
+        run = run,
+        ackedBy = {},
+    })
 
     -- Check limit
     local limit = CM:GetProfileSettingSafe("developer.mythicplus.runLogger.historySize", 5)
@@ -1082,12 +1099,36 @@ function MythicPlusRunLogger:_SyncHistory()
 
     if not RunSharing or not RunSharing.SendRun then return end
 
-    -- If not linked, do nothing
-    if not RunSharing.receiver then return end
+    -- Determine recipients: explicit linked receiver + any registered receivers.
+    local recipients = {}
+    if RunSharing.GetRecipients then
+        recipients = RunSharing:GetRecipients()
+    elseif RunSharing.receiver then
+        recipients = { RunSharing.receiver }
+    end
+
+    if not recipients or #recipients == 0 then return end
+
+    -- Upgrade any old entries in-place.
+    for i = 1, #db.runHistory do
+        local e = db.runHistory[i]
+        if type(e) == "table" and e.id then
+            db.runHistory[i] = { run = e, ackedBy = {} }
+        elseif type(e) == "table" and e.run and type(e.ackedBy) ~= "table" then
+            e.ackedBy = {}
+        end
+    end
 
     -- Send all runs in history
-    for _, run in ipairs(db.runHistory) do
-        RunSharing:SendRun(run)
+    for _, entry in ipairs(db.runHistory) do
+        if type(entry) == "table" and type(entry.run) == "table" then
+            entry.ackedBy = entry.ackedBy or {}
+            for _, receiver in ipairs(recipients) do
+                if type(receiver) == "string" and receiver ~= "" and not entry.ackedBy[receiver] then
+                    RunSharing:SendRun(entry.run, receiver)
+                end
+            end
+        end
     end
 end
 
@@ -1095,10 +1136,45 @@ function MythicPlusRunLogger:_OnRunAcknowledged(runId, sender)
     local db = GetDB()
     if not db.runHistory then return end
 
-    for i, run in ipairs(db.runHistory) do
-        if run.id == runId then
-            table.remove(db.runHistory, i)
-            Logger.Info("Run " .. runId .. " acknowledged by " .. sender .. ". Removed from history.")
+    -- Ensure wrapper format.
+    for i = 1, #db.runHistory do
+        local e = db.runHistory[i]
+        if type(e) == "table" and e.id then
+            db.runHistory[i] = { run = e, ackedBy = {} }
+        elseif type(e) == "table" and e.run and type(e.ackedBy) ~= "table" then
+            e.ackedBy = {}
+        end
+    end
+
+    local recipients = {}
+    if RunSharing and RunSharing.GetRecipients then
+        recipients = RunSharing:GetRecipients()
+    elseif RunSharing and RunSharing.receiver then
+        recipients = { RunSharing.receiver }
+    end
+
+    for i = #db.runHistory, 1, -1 do
+        local entry = db.runHistory[i]
+        local run = (type(entry) == "table" and entry.run) or nil
+        if run and run.id == runId then
+            entry.ackedBy = entry.ackedBy or {}
+            entry.ackedBy[sender] = true
+
+            -- Remove if all current recipients have ACKed.
+            local allAcked = true
+            for _, r in ipairs(recipients) do
+                if r and r ~= "" and not entry.ackedBy[r] then
+                    allAcked = false
+                    break
+                end
+            end
+
+            if allAcked then
+                table.remove(db.runHistory, i)
+                Logger.Info("Run " .. runId .. " acknowledged by all recipients. Removed from history.")
+            else
+                Logger.Info("Run " .. runId .. " acknowledged by " .. sender .. ".")
+            end
             break
         end
     end
@@ -1118,6 +1194,12 @@ function MythicPlusRunLogger:Initialize()
 
         if RunSharing.OnConnectionEstablished then
             RunSharing.OnConnectionEstablished:Register(function(sender)
+                self:_SyncHistory()
+            end)
+        end
+
+        if RunSharing.OnReceiverRegistered then
+            RunSharing.OnReceiverRegistered:Register(function(sender)
                 self:_SyncHistory()
             end)
         end
