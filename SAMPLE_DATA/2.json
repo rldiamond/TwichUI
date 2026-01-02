@@ -1,0 +1,623 @@
+{
+  "events": [
+    {
+      "name": "GROUP_ROSTER_SNAPSHOT",
+      "payload": {
+        "group": [
+          {
+            "class": "DRUID",
+            "guid": "Player-60-0FD1990A",
+            "name": "Zulthornp",
+            "realm": "Stormrage",
+            "role": "DAMAGER",
+            "spec": "Balance",
+            "specId": 102,
+            "unit": "player"
+          },
+          {
+            "class": "SHAMAN",
+            "guid": "Player-76-0BEF013D",
+            "name": "Sargeronhas",
+            "realm": "Sargeras",
+            "role": "HEALER",
+            "unit": "party1"
+          },
+          {
+            "class": "DEMONHUNTER",
+            "guid": "Player-77-0FD49948",
+            "name": "Dhzilong",
+            "realm": "Nazjatar",
+            "role": "DAMAGER",
+            "unit": "party2"
+          },
+          {
+            "class": "PALADIN",
+            "guid": "Player-11-0E88B398",
+            "name": "Chuangcute",
+            "realm": "Tichondrius",
+            "role": "DAMAGER",
+            "unit": "party3"
+          },
+          {
+            "class": "WARRIOR",
+            "guid": "Player-76-0A72476C",
+            "name": "Lolsurprised",
+            "realm": "Sargeras",
+            "role": "TANK",
+            "unit": "party4"
+          }
+        ],
+        "reason": "start"
+      },
+      "relSeconds": 0,
+      "timestamp": 1767362101
+    },
+    {
+      "name": "CHALLENGE_MODE_START",
+      "payload": { "mapId": 2830 },
+      "relSeconds": 0,
+      "timestamp": 1767362101
+    },
+    {
+      "name": "GROUP_ROSTER_UPDATE",
+      "payload": {
+        "group": [
+          {
+            "class": "DRUID",
+            "guid": "Player-60-0FD1990A",
+            "name": "Zulthornp",
+            "realm": "Stormrage",
+            "role": "DAMAGER",
+            "spec": "Balance",
+            "specId": 102,
+            "unit": "player"
+          },
+          {
+            "class": "SHAMAN",
+            "guid": "Player-76-0BEF013D",
+            "name": "Sargeronhas",
+            "realm": "Sargeras",
+            "role": "HEALER",
+            "unit": "party1"
+          },
+          {
+            "class": "DEMONHUNTER",
+            "guid": "Player-77-0FD49948",
+            "name": "Dhzilong",
+            "realm": "Nazjatar",
+            "role": "DAMAGER",
+            "unit": "party2"
+          },
+          {
+            "class": "PALADIN",
+            "guid": "Player-11-0E88B398",
+            "name": "Chuangcute",
+            "realm": "Tichondrius",
+            "role": "DAMAGER",
+            "unit": "party3"
+          },
+          {
+            "class": "WARRIOR",
+            "guid": "Player-76-0A72476C",
+            "name": "Lolsurprised",
+            "realm": "Sargeras",
+            "role": "TANK",
+            "unit": "party4"
+          }
+        ]
+      },
+      "relSeconds": 0.20900000000029,
+      "timestamp": 1767362102
+    },
+    {
+      "name": "GROUP_ROSTER_UPDATE",
+      "payload": {
+        "group": [
+          {
+            "class": "DRUID",
+            "guid": "Player-60-0FD1990A",
+            "name": "Zulthornp",
+            "realm": "Stormrage",
+            "role": "DAMAGER",
+            "spec": "Balance",
+            "specId": 102,
+            "unit": "player"
+          },
+          {
+            "class": "SHAMAN",
+            "guid": "Player-76-0BEF013D",
+            "name": "Sargeronhas",
+            "realm": "Sargeras",
+            "role": "HEALER",
+            "unit": "party1"
+          },
+          {
+            "class": "DEMONHUNTER",
+            "guid": "Player-77-0FD49948",
+            "name": "Dhzilong",
+            "realm": "Nazjatar",
+            "role": "DAMAGER",
+            "unit": "party2"
+          },
+          {
+            "class": "PALADIN",
+            "guid": "Player-11-0E88B398",
+            "name": "Chuangcute",
+            "realm": "Tichondrius",
+            "role": "DAMAGER",
+            "unit": "party3"
+          },
+          {
+            "class": "WARRIOR",
+            "guid": "Player-76-0A72476C",
+            "name": "Lolsurprised",
+            "realm": "Sargeras",
+            "role": "TANK",
+            "unit": "party4"
+          }
+        ]
+      },
+      "relSeconds": 119.109,
+      "timestamp": 1767362221
+    },
+    {
+      "name": "ENCOUNTER_START",
+      "payload": {
+        "difficultyID": 8,
+        "encounterID": 3107,
+        "encounterName": "Azhiccar",
+        "groupSize": 5
+      },
+      "relSeconds": 172.207,
+      "timestamp": 1767362274
+    },
+    {
+      "name": "ENCOUNTER_END",
+      "payload": {
+        "difficultyID": 8,
+        "encounterID": 3107,
+        "encounterName": "Azhiccar",
+        "groupSize": 5,
+        "success": 1
+      },
+      "relSeconds": 358.141,
+      "timestamp": 1767362460
+    },
+    {
+      "name": "CHALLENGE_MODE_DEATH_COUNT_UPDATED",
+      "payload": { "count": 1 },
+      "relSeconds": 618.989,
+      "timestamp": 1767362720
+    },
+    {
+      "name": "CHALLENGE_MODE_DEATH_COUNT_UPDATED",
+      "payload": { "count": 2 },
+      "relSeconds": 625.495,
+      "timestamp": 1767362727
+    },
+    {
+      "name": "CHALLENGE_MODE_DEATH_COUNT_UPDATED",
+      "payload": { "count": 3 },
+      "relSeconds": 633.851,
+      "timestamp": 1767362735
+    },
+    {
+      "name": "PLAYER_DEAD",
+      "payload": { "unit": "player" },
+      "relSeconds": 633.944,
+      "timestamp": 1767362735
+    },
+    {
+      "name": "CHALLENGE_MODE_DEATH_COUNT_UPDATED",
+      "payload": { "count": 4 },
+      "relSeconds": 643.04,
+      "timestamp": 1767362744
+    },
+    {
+      "name": "CHALLENGE_MODE_DEATH_COUNT_UPDATED",
+      "payload": { "count": 5 },
+      "relSeconds": 646.674,
+      "timestamp": 1767362748
+    },
+    {
+      "name": "ENCOUNTER_START",
+      "payload": {
+        "difficultyID": 8,
+        "encounterID": 3108,
+        "encounterName": "Taah'bat and A'wazj",
+        "groupSize": 5
+      },
+      "relSeconds": 899.586,
+      "timestamp": 1767363001
+    },
+    {
+      "name": "ENCOUNTER_END",
+      "payload": {
+        "difficultyID": 8,
+        "encounterID": 3108,
+        "encounterName": "Taah'bat and A'wazj",
+        "groupSize": 5,
+        "success": 1
+      },
+      "relSeconds": 1137.212,
+      "timestamp": 1767363239
+    },
+    {
+      "name": "CHALLENGE_MODE_DEATH_COUNT_UPDATED",
+      "payload": { "count": 6 },
+      "relSeconds": 1266.667,
+      "timestamp": 1767363368
+    },
+    {
+      "name": "CHALLENGE_MODE_DEATH_COUNT_UPDATED",
+      "payload": { "count": 7 },
+      "relSeconds": 1272.727,
+      "timestamp": 1767363374
+    },
+    {
+      "name": "CHALLENGE_MODE_DEATH_COUNT_UPDATED",
+      "payload": { "count": 8 },
+      "relSeconds": 1273.561,
+      "timestamp": 1767363375
+    },
+    {
+      "name": "PLAYER_DEAD",
+      "payload": { "unit": "player" },
+      "relSeconds": 1273.677,
+      "timestamp": 1767363375
+    },
+    {
+      "name": "CHALLENGE_MODE_DEATH_COUNT_UPDATED",
+      "payload": { "count": 9 },
+      "relSeconds": 1282.154,
+      "timestamp": 1767363384
+    },
+    {
+      "name": "CHALLENGE_MODE_DEATH_COUNT_UPDATED",
+      "payload": { "count": 10 },
+      "relSeconds": 1284.648,
+      "timestamp": 1767363386
+    },
+    {
+      "name": "ENCOUNTER_START",
+      "payload": {
+        "difficultyID": 8,
+        "encounterID": 3109,
+        "encounterName": "Soul-Scribe",
+        "groupSize": 5
+      },
+      "relSeconds": 1564.712,
+      "timestamp": 1767363666
+    },
+    {
+      "name": "CHALLENGE_MODE_DEATH_COUNT_UPDATED",
+      "payload": { "count": 11 },
+      "relSeconds": 1713.18,
+      "timestamp": 1767363815
+    },
+    {
+      "name": "CHALLENGE_MODE_DEATH_COUNT_UPDATED",
+      "payload": { "count": 12 },
+      "relSeconds": 1713.18,
+      "timestamp": 1767363815
+    },
+    {
+      "name": "GROUP_ROSTER_UPDATE",
+      "payload": {
+        "group": [
+          {
+            "class": "DRUID",
+            "guid": "Player-60-0FD1990A",
+            "name": "Zulthornp",
+            "realm": "Stormrage",
+            "role": "DAMAGER",
+            "spec": "Balance",
+            "specId": 102,
+            "unit": "player"
+          },
+          {
+            "class": "SHAMAN",
+            "guid": "Player-76-0BEF013D",
+            "name": "Sargeronhas",
+            "realm": "Sargeras",
+            "role": "HEALER",
+            "unit": "party1"
+          },
+          {
+            "class": "DEMONHUNTER",
+            "guid": "Player-77-0FD49948",
+            "name": "Dhzilong",
+            "realm": "Nazjatar",
+            "role": "DAMAGER",
+            "spec": "Havoc",
+            "specId": 577,
+            "unit": "party2"
+          },
+          {
+            "class": "PALADIN",
+            "guid": "Player-11-0E88B398",
+            "name": "Chuangcute",
+            "realm": "Tichondrius",
+            "role": "DAMAGER",
+            "unit": "party3"
+          },
+          {
+            "class": "WARRIOR",
+            "guid": "Player-76-0A72476C",
+            "name": "Lolsurprised",
+            "realm": "Sargeras",
+            "role": "TANK",
+            "unit": "party4"
+          }
+        ]
+      },
+      "relSeconds": 1718.954,
+      "timestamp": 1767363820
+    },
+    {
+      "name": "CHALLENGE_MODE_DEATH_COUNT_UPDATED",
+      "payload": { "count": 13 },
+      "relSeconds": 1723.757,
+      "timestamp": 1767363825
+    },
+    {
+      "name": "PLAYER_DEAD",
+      "payload": { "unit": "player" },
+      "relSeconds": 1723.834,
+      "timestamp": 1767363825
+    },
+    {
+      "name": "CHALLENGE_MODE_DEATH_COUNT_UPDATED",
+      "payload": { "count": 14 },
+      "relSeconds": 1731.259,
+      "timestamp": 1767363833
+    },
+    {
+      "name": "CHALLENGE_MODE_DEATH_COUNT_UPDATED",
+      "payload": { "count": 15 },
+      "relSeconds": 1748.778,
+      "timestamp": 1767363850
+    },
+    {
+      "name": "CHALLENGE_MODE_DEATH_COUNT_UPDATED",
+      "payload": { "count": 16 },
+      "relSeconds": 1750.692,
+      "timestamp": 1767363852
+    },
+    {
+      "name": "ENCOUNTER_END",
+      "payload": {
+        "difficultyID": 8,
+        "encounterID": 3109,
+        "encounterName": "Soul-Scribe",
+        "groupSize": 5,
+        "success": 0
+      },
+      "relSeconds": 1751.846,
+      "timestamp": 1767363853
+    },
+    {
+      "name": "GROUP_ROSTER_UPDATE",
+      "payload": {
+        "group": [
+          {
+            "class": "DRUID",
+            "guid": "Player-60-0FD1990A",
+            "name": "Zulthornp",
+            "realm": "Stormrage",
+            "role": "DAMAGER",
+            "spec": "Balance",
+            "specId": 102,
+            "unit": "player"
+          },
+          {
+            "class": "DEMONHUNTER",
+            "guid": "Player-77-0FD49948",
+            "name": "Dhzilong",
+            "realm": "Nazjatar",
+            "role": "DAMAGER",
+            "unit": "party1"
+          },
+          {
+            "class": "PALADIN",
+            "guid": "Player-11-0E88B398",
+            "name": "Chuangcute",
+            "realm": "Tichondrius",
+            "role": "DAMAGER",
+            "unit": "party2"
+          },
+          {
+            "class": "WARRIOR",
+            "guid": "Player-76-0A72476C",
+            "name": "Lolsurprised",
+            "realm": "Sargeras",
+            "role": "TANK",
+            "unit": "party3"
+          }
+        ]
+      },
+      "relSeconds": 1762.805,
+      "timestamp": 1767363864
+    },
+    {
+      "name": "GROUP_ROSTER_UPDATE",
+      "payload": {
+        "group": [
+          {
+            "class": "DRUID",
+            "guid": "Player-60-0FD1990A",
+            "name": "Zulthornp",
+            "realm": "Stormrage",
+            "role": "DAMAGER",
+            "spec": "Balance",
+            "specId": 102,
+            "unit": "player"
+          },
+          {
+            "class": "DEMONHUNTER",
+            "guid": "Player-77-0FD49948",
+            "name": "Dhzilong",
+            "realm": "Nazjatar",
+            "role": "DAMAGER",
+            "spec": "Havoc",
+            "specId": 577,
+            "unit": "party1"
+          },
+          {
+            "class": "PALADIN",
+            "guid": "Player-11-0E88B398",
+            "name": "Chuangcute",
+            "realm": "Tichondrius",
+            "role": "DAMAGER",
+            "unit": "party2"
+          }
+        ]
+      },
+      "relSeconds": 1769.332,
+      "timestamp": 1767363871
+    },
+    {
+      "name": "GROUP_ROSTER_UPDATE",
+      "payload": {
+        "group": [
+          {
+            "class": "DRUID",
+            "guid": "Player-60-0FD1990A",
+            "name": "Zulthornp",
+            "realm": "Stormrage",
+            "role": "DAMAGER",
+            "spec": "Balance",
+            "specId": 102,
+            "unit": "player"
+          },
+          {
+            "class": "PALADIN",
+            "guid": "Player-11-0E88B398",
+            "name": "Chuangcute",
+            "realm": "Tichondrius",
+            "role": "DAMAGER",
+            "unit": "party1"
+          }
+        ]
+      },
+      "relSeconds": 1771.717,
+      "timestamp": 1767363873
+    },
+    {
+      "name": "GROUP_ROSTER_UPDATE",
+      "payload": {
+        "group": [
+          {
+            "class": "DRUID",
+            "guid": "Player-60-0FD1990A",
+            "name": "Zulthornp",
+            "realm": "Stormrage",
+            "role": "NONE",
+            "spec": "Balance",
+            "specId": 102,
+            "unit": "player"
+          }
+        ]
+      },
+      "relSeconds": 1772.503,
+      "timestamp": 1767363874
+    },
+    {
+      "name": "PLAYER_ENTERING_WORLD",
+      "payload": {
+        "isChallengeModeActive": false,
+        "isInitialLogin": false,
+        "isReloadingUi": false
+      },
+      "relSeconds": 1800.296,
+      "timestamp": 1767363902
+    },
+    {
+      "name": "FAILSAFE_FINISH",
+      "payload": { "reason": "not_in_challenge_mode" },
+      "relSeconds": 1800.296,
+      "timestamp": 1767363902
+    }
+  ],
+  "format": "TwichUI_RunLog_v2",
+  "meta": {
+    "addonVersion": "0.06-ALPHA",
+    "format": "TwichUI_RunLog_v2",
+    "wowBuild": "64978",
+    "wowToc": 110207,
+    "wowVersion": "11.2.7"
+  },
+  "run": {
+    "affixes": [162, 9, 10, 147],
+    "endUnix": 1767363902,
+    "group": [
+      {
+        "class": "DRUID",
+        "guid": "Player-60-0FD1990A",
+        "name": "Zulthornp",
+        "realm": "Stormrage",
+        "role": "NONE",
+        "spec": "Balance",
+        "specId": 102,
+        "unit": "player"
+      }
+    ],
+    "groupStart": [
+      {
+        "class": "DRUID",
+        "guid": "Player-60-0FD1990A",
+        "name": "Zulthornp",
+        "realm": "Stormrage",
+        "role": "DAMAGER",
+        "spec": "Balance",
+        "specId": 102,
+        "unit": "player"
+      },
+      {
+        "class": "SHAMAN",
+        "guid": "Player-76-0BEF013D",
+        "name": "Sargeronhas",
+        "realm": "Sargeras",
+        "role": "HEALER",
+        "unit": "party1"
+      },
+      {
+        "class": "DEMONHUNTER",
+        "guid": "Player-77-0FD49948",
+        "name": "Dhzilong",
+        "realm": "Nazjatar",
+        "role": "DAMAGER",
+        "unit": "party2"
+      },
+      {
+        "class": "PALADIN",
+        "guid": "Player-11-0E88B398",
+        "name": "Chuangcute",
+        "realm": "Tichondrius",
+        "role": "DAMAGER",
+        "unit": "party3"
+      },
+      {
+        "class": "WARRIOR",
+        "guid": "Player-76-0A72476C",
+        "name": "Lolsurprised",
+        "realm": "Sargeras",
+        "role": "TANK",
+        "unit": "party4"
+      }
+    ],
+    "id": "1767362101-2830",
+    "level": 14,
+    "mapId": 2830,
+    "player": {
+      "class": "DRUID",
+      "guid": "Player-60-0FD1990A",
+      "name": "Zulthornp",
+      "realm": "Stormrage",
+      "spec": "Balance",
+      "specId": 102
+    },
+    "startUnix": 1767362101,
+    "status": "abandoned"
+  }
+}

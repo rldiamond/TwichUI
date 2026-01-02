@@ -28,7 +28,7 @@ local E = _G.ElvUI and _G.ElvUI[1]
 local Skins = E and E.GetModule and E:GetModule("Skins", true)
 
 -- Constants
-local ROW_HEIGHT = 20
+local ROW_HEIGHT = 32
 local MAX_ROWS = 15
 
 StaticPopupDialogs["TWICHUI_CONFIRM_DELETE_REMOTE_RUN"] = {
@@ -273,6 +273,12 @@ function RunSharingFrame:CreateFrame()
     frame:Hide()
     frame:EnableMouse(true)
     frame:SetMovable(true)
+    frame:SetResizable(true)
+    if frame.SetResizeBounds then
+        frame:SetResizeBounds(600, 400)
+    else
+        frame:SetMinResize(600, 400)
+    end
     frame:RegisterForDrag("LeftButton")
     frame:SetScript("OnDragStart", frame.StartMoving)
     frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
@@ -320,6 +326,7 @@ function RunSharingFrame:CreateFrame()
     listScroll:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 12, 100) -- Raised to make room for progress bar
     listScroll:SetWidth(250)
     if Skins and listScroll.ScrollBar then Skins:HandleScrollBar(listScroll.ScrollBar) end
+    self.listScroll = listScroll
 
     -- List Content
     local listContent = CreateFrame("Frame", nil, listScroll)
@@ -558,6 +565,42 @@ function RunSharingFrame:CreateFrame()
     self.eventText = eventText
 
     self.progressBar = progressBar
+
+    -- Resize Grip (Bottom Right)
+    local resizeGrip = CreateFrame("Button", nil, frame)
+    resizeGrip:SetSize(12, 12)
+    resizeGrip:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -2, 2)
+    resizeGrip:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up")
+    resizeGrip:SetHighlightTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Highlight")
+    resizeGrip:SetPushedTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Down")
+    resizeGrip:SetFrameLevel(frame:GetFrameLevel() + 10)
+    resizeGrip:EnableMouse(true)
+    resizeGrip:SetScript("OnMouseDown", function(_, button)
+        if button == "LeftButton" then
+            frame:StartSizing("BOTTOMRIGHT")
+        end
+    end)
+    resizeGrip:SetScript("OnMouseUp", function(_, button)
+        if button == "LeftButton" then
+            frame:StopMovingOrSizing()
+        end
+    end)
+
+    frame:SetScript("OnSizeChanged", function()
+        if self.detailsScroll and self.detailsEditBox then
+            local w = self.detailsScroll:GetWidth()
+            if w and w > 0 then
+                self.detailsEditBox:SetWidth(math.max(200, w - 30))
+            end
+        end
+
+        if self.eventsScroll and self.eventsContent then
+            local w = self.eventsScroll:GetWidth()
+            if w and w > 0 then
+                self.eventsContent:SetWidth(math.max(200, w - 30))
+            end
+        end
+    end)
 
     -- Register Simulator Callbacks
     if Simulator and Simulator.RegisterCallback then
@@ -914,10 +957,10 @@ function RunSharingFrame:ResolveDungeonName(run)
             end
             print(string.format("TwichUI: Resolved dungeon name for run to '%s' (MapID: %s)", name, tostring(mapId)))
         else
-            print("TwichUI Debug: All API lookups (GetMapUIInfo, GetMapInfo, C_Map) returned nil for mapId:", mapId)
+            -- print("TwichUI Debug: All API lookups (GetMapUIInfo, GetMapInfo, C_Map) returned nil for mapId:", mapId)
         end
     else
-        print("TwichUI Debug: Could not find mapId for run")
+        -- print("TwichUI Debug: Could not find mapId for run")
     end
 end
 
@@ -953,6 +996,7 @@ function RunSharingFrame:UpdateList()
             text:SetPoint("LEFT", 5, 0)
             text:SetPoint("RIGHT", -45, 0)
             text:SetJustifyH("LEFT")
+            if text.SetWordWrap then text:SetWordWrap(true) end
             text:SetTextColor(1, 1, 1)
             row.text = text
 
@@ -1205,7 +1249,6 @@ function RunSharingFrame:UpdateEventsList(events)
 
             local nameText = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
             nameText:SetPoint("TOPLEFT", timeText, "TOPRIGHT", 5, 0)
-            nameText:SetWidth(300)
             nameText:SetJustifyH("LEFT")
             row.nameText = nameText
 
@@ -1215,6 +1258,9 @@ function RunSharingFrame:UpdateEventsList(events)
             playBtn:SetText("Simulate")
             if Skins then Skins:HandleButton(playBtn) end
             row.playBtn = playBtn
+
+            -- Fill remaining space up to the play button.
+            nameText:SetPoint("TOPRIGHT", playBtn, "TOPLEFT", -8, 0)
 
             row:SetScript("OnClick", function() self:ToggleEventDetails(i) end)
 
@@ -1253,7 +1299,17 @@ function RunSharingFrame:UpdateEventsList(events)
             self.eventRows[i] = row
         end
 
+        row:ClearAllPoints()
         row:SetPoint("TOPLEFT", 0, -yOffset)
+        row:SetPoint("TOPRIGHT", 0, -yOffset)
+
+        -- Ensure older rows (created before anchoring changes) stretch correctly.
+        if row.nameText and row.playBtn and row.timeText then
+            row.nameText:ClearAllPoints()
+            row.nameText:SetPoint("TOPLEFT", row.timeText, "TOPRIGHT", 5, 0)
+            row.nameText:SetPoint("TOPRIGHT", row.playBtn, "TOPLEFT", -8, 0)
+        end
+
         row:Show()
         row.eventData = ev
         row.eventIndex = i

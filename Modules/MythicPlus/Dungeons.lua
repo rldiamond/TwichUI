@@ -53,12 +53,39 @@ local PORTAL_TEXTURE = "Interface\\AddOns\\TwichUI\\Media\\Textures\\portal.tga"
 -- Best-effort: find the player's dungeon teleport spell for a map by scanning the spellbook
 -- for a spell whose name contains the dungeon's localized name.
 local _portalSpellCache = {}
+local _portalSpellPendingUntil = {}
+
+---@param s any
+---@return string
+local function NormalizeText(s)
+    if type(s) ~= "string" then return "" end
+    s = s:lower()
+    -- Collapse punctuation/whitespace. Keeps letters/digits (including locale chars).
+    s = s:gsub("[%p%c]", " ")
+    s = s:gsub("%s+", " ")
+    s = s:gsub("^%s+", ""):gsub("%s+$", "")
+    return s
+end
+
+---@param haystack string
+---@param needle string
+---@return boolean
+local function TextContains(haystack, needle)
+    if haystack == "" or needle == "" then return false end
+    return haystack:find(needle, 1, true) ~= nil
+end
 
 ---@param mapId number|nil
 ---@return number|nil spellId
 local function FindDungeonPortalSpellId(mapId)
     mapId = tonumber(mapId)
     if not mapId then return nil end
+
+    local now = (type(GetTime) == "function" and GetTime()) or 0
+    local pendingUntil = _portalSpellPendingUntil[mapId]
+    if pendingUntil and pendingUntil > now then
+        return nil
+    end
 
     if _portalSpellCache[mapId] ~= nil then
         return _portalSpellCache[mapId] or nil
@@ -68,6 +95,9 @@ local function FindDungeonPortalSpellId(mapId)
     if type(dungeonName) ~= "string" or dungeonName == "" then
         return nil
     end
+
+    local dungeonKey = NormalizeText(dungeonName)
+    if dungeonKey == "" then return nil end
 
     ---@diagnostic disable-next-line: undefined-field
     local GetNumSpellTabs = _G.GetNumSpellTabs
@@ -87,6 +117,9 @@ local function FindDungeonPortalSpellId(mapId)
     ---@diagnostic disable-next-line: undefined-field
     local BOOKTYPE_SPELL = _G.BOOKTYPE_SPELL or "spell"
 
+    local requestedSpellData = false
+    local C_Spell = _G.C_Spell
+
     for tab = 1, GetNumSpellTabs() do
         local _, _, offset, numSpells = GetSpellTabInfo(tab)
         offset = tonumber(offset) or 0
@@ -97,20 +130,33 @@ local function FindDungeonPortalSpellId(mapId)
                 local name = (type(GetSpellBookItemName) == "function") and GetSpellBookItemName(slot, BOOKTYPE_SPELL) or
                     nil
                 if type(name) == "string" and name ~= "" then
-                    local match = name:find(dungeonName, 1, true)
+                    local nameKey = NormalizeText(name)
+                    local match = TextContains(nameKey, dungeonKey)
                     if not match then
                         -- Try reverse match (Dungeon Name contains Spell Name suffix)
                         -- e.g. Dungeon: "Ara-Kara, City of Echoes", Spell: "Teleport: Ara-Kara"
                         local target = name:match("^Teleport: (.+)") or name:match("^Path of the (.+)")
-                        if target and dungeonName:find(target, 1, true) then
-                            match = true
+                        if target then
+                            local targetKey = NormalizeText(target)
+                            if targetKey ~= "" and TextContains(dungeonKey, targetKey) then
+                                match = true
+                            end
                         end
                     end
 
-                    if not match and _G.GetSpellDescription then
-                        local desc = _G.GetSpellDescription(spellId)
-                        if type(desc) == "string" and desc:find(dungeonName, 1, true) then
-                            match = true
+                    if not match and C_Spell and type(C_Spell.GetSpellDescription) == "function" then
+                        local desc = C_Spell.GetSpellDescription(spellId)
+                        if type(desc) == "string" and desc ~= "" then
+                            local descKey = NormalizeText(desc)
+                            if TextContains(descKey, dungeonKey) then
+                                match = true
+                            end
+                        else
+                            -- Spell description may be empty until spell data is loaded.
+                            if type(C_Spell.RequestLoadSpellData) == "function" then
+                                C_Spell.RequestLoadSpellData(spellId)
+                                requestedSpellData = true
+                            end
                         end
                     end
 
@@ -126,8 +172,25 @@ local function FindDungeonPortalSpellId(mapId)
         end
     end
 
+    if requestedSpellData then
+        -- Avoid caching a negative result while spell text is still loading.
+        _portalSpellPendingUntil[mapId] = now + 1.0
+        return nil
+    end
+
     _portalSpellCache[mapId] = false
     return nil
+end
+
+local function ClearPortalSpellCache()
+    local wipeFn = _G.wipe or (_G.table and _G.table.wipe)
+    if type(wipeFn) == "function" then
+        wipeFn(_portalSpellCache)
+        wipeFn(_portalSpellPendingUntil)
+    else
+        for k in pairs(_portalSpellCache) do _portalSpellCache[k] = nil end
+        for k in pairs(_portalSpellPendingUntil) do _portalSpellPendingUntil[k] = nil end
+    end
 end
 
 ---@param panel Frame
@@ -2316,6 +2379,35 @@ end
 function Dungeons:Initialize()
     if self.initialized then return end
     self.initialized = true
+
+    -- Spell names/descriptions can be empty until data is loaded; clear/retry cache when spell text updates.
+    if not self.__twichuiPortalSpellEventFrame then
+        local f = CreateFrame("Frame")
+        self.__twichuiPortalSpellEventFrame = f
+        f:RegisterEvent("SPELL_TEXT_UPDATE")
+        f:RegisterEvent("SPELLS_CHANGED")
+        f:SetScript("OnEvent", function()
+            ClearPortalSpellCache()
+
+            -- Throttle refresh to avoid spamming when multiple spell records load.
+            if self.__twichuiPortalSpellRefreshPending then return end
+            self.__twichuiPortalSpellRefreshPending = true
+            local C_Timer = _G.C_Timer
+            if C_Timer and type(C_Timer.After) == "function" then
+                C_Timer.After(0.2, function()
+                    self.__twichuiPortalSpellRefreshPending = false
+                    if self.Refresh then
+                        self:Refresh()
+                    end
+                end)
+            else
+                self.__twichuiPortalSpellRefreshPending = false
+                if self.Refresh then
+                    self:Refresh()
+                end
+            end
+        end)
+    end
 
     -- Register the panel with the main window registry.
     if MythicPlusModule.MainWindow and MythicPlusModule.MainWindow.RegisterPanel then
